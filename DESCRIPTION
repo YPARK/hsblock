@@ -1,0 +1,11 @@
+Package: hsblock
+Type: Package
+Title: Hierarchical Stochastic Block Model
+Version: 0.1.0
+Date: 2018-06-21
+Author: Yongjin Park
+Maintainer: Yongjin Park <ypp@csail.mit.edu>
+Description: Implementation of HSBLOCK in Rcpp
+License: MIT License
+Imports: Rcpp (>= 0.12.6), RcppEigen (>= 0.3.2.9.0), RcppProgress (>= 0.2.1)
+LinkingTo: Rcpp, RcppEigen, RcppProgress
