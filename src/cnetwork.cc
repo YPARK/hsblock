@@ -4,7 +4,8 @@ void collapsible_network_t::contract_pair(int u, int v) {
   if (u == v) return;
 
 #ifdef DEBUG
-  assert(edges.has_row(dim_t(u)) && edges.has_row(dim_t(v)));
+  ASSERT(edges.has_row(dim_t(u)) && edges.has_row(dim_t(v)),
+         "u and v must be in cnetwork: " << u << ", " << v);
 #endif
 
   // back-up (u,v) data and delete edge (u,v)
@@ -29,7 +30,7 @@ void collapsible_network_t::contract_pair(int u, int v) {
     int w = it.dim();
 
 #ifdef DEBUG
-    assert(w != v);  // can arise if there is self-loop
+    ASSERT(w != v, "There is self-loop: " << w << ", " << v);
 #endif
 
     edges(dim_t(w), dim_t(u), it.value());
@@ -85,8 +86,8 @@ void check_collapsing_error(const collapsible_network_t& G0,
   sp_stat_vec_t& within_degrees = G.within_degrees;
   sp_stat_vec_t& degsum = G.degree_sum;
 
-  vector<int> set_r;
-  vector<int> set_c;
+  std::vector<int> set_r;
+  std::vector<int> set_c;
   int r, c;
   for (sp_stat_mat_t::row_iterator_t ri = edges.begin_row();
        ri != edges.end_row(); ++ri) {
@@ -94,25 +95,25 @@ void check_collapsing_error(const collapsible_network_t& G0,
     set_r.clear();
     set_r.push_back(r);
 
-    // cout << r;
+    // Rcpp::Rcout << r;
     if (children.has_row(dim_t(r))) {
       const sp_stat_vec_t& r_vec = children.pull_const_row(dim_t(r));
       for (sp_stat_vec_t::iterator_t it = r_vec.begin_nonzero();
            it != r_vec.end_nonzero(); ++it) {
         set_r.push_back(it.dim());
-        // cout << " " << it.dim();
+        // Rcpp::Rcout << " " << it.dim();
       }
     }
-    // cout << endl;
+    // Rcpp::Rcout << std::endl;
     if (abs(set_r.size() - size_vec(dim_t(r))) > 1e-5)
-      cout << " r=" << r << " size " << set_r.size() << " vs "
-           << size_vec(dim_t(r)) << endl;
-    assert(abs(set_r.size() - size_vec(dim_t(r))) < 1e-5);
+      Rcpp::Rcout << " r=" << r << " size " << set_r.size() << " vs "
+                  << size_vec(dim_t(r)) << std::endl;
+    ASSERT(abs(set_r.size() - size_vec(dim_t(r))) < 1e-4, "check set_r size");
 
     // within edges and degrees
     if (set_r.size() == 1) {
-      assert(abs(within_edges(dim_t(r))) < 1e-5);
-      assert(abs(within_degrees(dim_t(r))) < 1e-5);
+      ASSERT(abs(within_edges(dim_t(r))) < 1e-4, "check within edge");
+      ASSERT(abs(within_degrees(dim_t(r))) < 1e-4, "check within degree");
     } else {
       // collapsed edges
       double val_org = 0.;
@@ -122,9 +123,9 @@ void check_collapsing_error(const collapsible_network_t& G0,
 
       double val_debug = within_edges(dim_t(r));
       if (abs(val_org - val_debug) > 1e-5)
-        cout << " within edge " << r << " : " << val_org << " vs " << val_debug
-             << endl;
-      assert(abs(val_debug - val_org) < 1e-5);
+        Rcpp::Rcout << " within edge " << r << " : " << val_org << " vs "
+                    << val_debug << std::endl;
+      ASSERT(abs(val_debug - val_org) < 1e-4, "check collapsed edges");
 
       // degree product and sum
       val_org = 0.;
@@ -134,18 +135,18 @@ void check_collapsing_error(const collapsible_network_t& G0,
 
       val_debug = within_degrees(dim_t(r));
       if (abs(val_org - val_debug) > 1e-5)
-        cout << " within degree " << r << " : " << val_org << " vs "
-             << val_debug << endl;
-      assert(abs(val_debug - val_org) < 1e-5);
+        Rcpp::Rcout << " within degree " << r << " : " << val_org << " vs "
+                    << val_debug << std::endl;
+      ASSERT(abs(val_debug - val_org) < 1e-4, "check within degree");
 
       val_org = 0.;
       for (int i = 0; i < set_r.size(); ++i) val_org += deg0(dim_t(set_r[i]));
 
       val_debug = degsum(dim_t(r));
       if (abs(val_org - val_debug) > 1e-5)
-        cout << " degree sum " << r << " : " << val_org << " vs " << val_debug
-             << endl;
-      assert(abs(val_debug - val_org) < 1e-5);
+        Rcpp::Rcout << " degree sum " << r << " : " << val_org << " vs "
+                    << val_debug << std::endl;
+      ASSERT(abs(val_debug - val_org) < 1e-4, "check deg sum");
     }
 
     // between edges
@@ -155,16 +156,16 @@ void check_collapsing_error(const collapsible_network_t& G0,
       c = ci.dim();
       set_c.clear();
       set_c.push_back(c);
-      // cout << c;
+      // Rcpp::Rcout << c;
       if (children.has_row(dim_t(c))) {
         const sp_stat_vec_t& c_vec = children.pull_const_row(dim_t(c));
         for (sp_stat_vec_t::iterator_t it = c_vec.begin_nonzero();
              it != c_vec.end_nonzero(); ++it) {
           set_c.push_back(it.dim());
-          // cout << " " << it.dim();
+          // Rcpp::Rcout << " " << it.dim();
         }
       }
-      // cout << endl;
+      // Rcpp::Rcout << std::endl;
 
       // calculate from original edges
       double val_org = 0.;
@@ -174,9 +175,9 @@ void check_collapsing_error(const collapsible_network_t& G0,
 
       double val_debug = edges(dim_t(r), dim_t(c));
       if (abs(val_org - val_debug) > 1e-5)
-        cout << " edge " << r << ", " << c << " : " << val_org << " vs "
-             << val_debug << endl;
-      assert(abs(val_org - val_debug) <= 1e-5);
+        Rcpp::Rcout << " edge " << r << ", " << c << " : " << val_org << " vs "
+                    << val_debug << std::endl;
+      ASSERT(abs(val_org - val_debug) <= 1e-4, "check between edges");
     }
   }
 }

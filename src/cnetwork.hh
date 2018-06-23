@@ -1,12 +1,10 @@
 // (c) Yongjin Park, 2013
 // collapsible network data structure
+#include "rcpp_util.hh"
 #include "sparse_data.hh"
-#include "sparse_io.hh"
 
 #ifndef COLLAPSABLE_NETWORK_HH
 #define COLLAPSABLE_NETWORK_HH
-
-using namespace std;
 
 struct collapsible_network_t {
   // copy constructor
@@ -28,7 +26,6 @@ struct collapsible_network_t {
       double d = sum(G0.pull_const_row(dim_t(*ri)), 1);
       degree_sum(dim_t(*ri), d);
       size_vec(dim_t(*ri), 1.);
-      // cerr << d << endl;
     }
     Dtot = sum(degree_sum, 1);
   }
@@ -56,12 +53,12 @@ struct collapsible_network_t {
 };  // End of collapsed network type
 
 // collapse network G0 and return smaller network G
-boost::shared_ptr<collapsible_network_t> collapse_network(
+std::shared_ptr<collapsible_network_t> collapse_network(
     const collapsible_network_t& G0);
 
 // matching node pairs by Jaccard coefficient
 void jaccard_matching(const sp_stat_mat_t& G0, const sp_stat_vec_t& degree,
-                      boost::unordered_map<int, int>& Match);
+                      std::unordered_map<int, int>& Match);
 
 ////////////////////////////////////////////////////////////////
 // error-checking after (many) collapsing / pair contraction

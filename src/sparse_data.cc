@@ -231,13 +231,12 @@ bool sp_stat_vec_t::is_empty(const dim_t& dim) const {
 }
 
 void sp_stat_vec_t::dump() const {
-  cerr << "|V| " << cardinality();
-  cerr << " #{V} " << size();
+  TLOG("|V| " << cardinality() << " #{V} " << size());
   for (iterator_t it = begin_nonzero(); it != end_nonzero(); ++it) {
-    cerr << "\t[" << it.dim() << "]";
-    cerr << " " << it.value();
+    Rcpp::Rcerr << "\t[" << it.dim() << "]";
+    Rcpp::Rcerr << " " << it.value();
   }
-  cerr << endl;
+  Rcpp::Rcerr << std::endl;
 }
 
 // inner product
@@ -267,17 +266,17 @@ double myAbs(double accum, double x) { return accum + abs(x); }
 
 double norm(const sp_stat_vec_t& xVec, int p) {
 #ifdef DEBUG
-  assert(p >= 0.);
+  ASSERT(p >= 0., "p must be greater than or equal to 0.0");
 #endif
   if (p == 0) return sum(xVec, 0);
   if (p == 1)
-    return accumulate(xVec.begin_nonzero(), xVec.end_nonzero(), 0., myAbs);
-  return pow(sum(xVec, p), 1. / ((double)p));
+    return std::accumulate(xVec.begin_nonzero(), xVec.end_nonzero(), 0., myAbs);
+  return std::pow(sum(xVec, p), 1. / ((double)p));
 }
 
 // sum of x^p
 double sum(const sp_stat_vec_t& xVec, int p) {
-  return accumulate(xVec.begin_nonzero(p), xVec.end_nonzero(), 0.);
+  return std::accumulate(xVec.begin_nonzero(p), xVec.end_nonzero(), 0.);
 }
 
 // log-scale computation
@@ -423,7 +422,7 @@ size_t sp_stat_mat_t::size() const { return data.size(); }
 
 void sp_stat_mat_t::dump() const {
   for (row_iterator_t it = begin_row(); it != end_row(); ++it) {
-    cerr << *it << " : ";
+    Rcpp::Rcerr << *it << " : ";
     pull_const_row(dim_t(*it)).dump();
   }
 }

@@ -1,9 +1,8 @@
 #include "rcpp_hsblock.hh"
 
 RcppExport SEXP rcpp_hsblock(SEXP options_sexp) {
-
-// SEXP Adj, SEXP effect_se_sexp, SEXP x_sexp,
-//                              SEXP c_sexp, SEXP c_delta_sexp, 
+  // SEXP Adj, SEXP effect_se_sexp, SEXP x_sexp,
+  //                              SEXP c_sexp, SEXP c_delta_sexp,
 
   BEGIN_RCPP
 

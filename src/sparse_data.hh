@@ -3,18 +3,16 @@
 #ifndef SPARSE_DATA_HH
 #define SPARSE_DATA_HH
 
-#include <boost/ptr_container/ptr_map.hpp>
-#include <boost/tuple/tuple.hpp>
-#include <boost/unordered_map.hpp>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <numeric>
+#include <unordered_map>
+#include <vector>
+#include "rcpp_util.hh"
 
-using namespace boost;
-using namespace std;
-
-// dimension index
-// strong type checker
+////////////////////////////////////////////////////////////////
+// dimension index, strong type checker
 struct dim_t {
   explicit dim_t(int _val) : val(_val) {
 #ifdef DEBUG
@@ -28,7 +26,7 @@ bool operator==(const dim_t &lhs, const dim_t &rhs);
 bool operator!=(const dim_t &lhs, const dim_t &rhs);
 
 namespace sp_stat {
-static const double zero_cutoff = 1e-5;
+static const double zero_cutoff = 1e-4;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -42,8 +40,8 @@ class sp_stat_vec_t {
   // e.g., iterate over k-th order stat
   class iterator_t {
    public:
-    explicit iterator_t(int _order,
-                        const unordered_map<int, double>::const_iterator &_jt)
+    explicit iterator_t(
+        int _order, const std::unordered_map<int, double>::const_iterator &_jt)
         : order(_order), jt(_jt) {
 #ifdef DEBUG
       assert(_order >= 0);
@@ -92,7 +90,7 @@ class sp_stat_vec_t {
 
    private:
     double order;
-    unordered_map<int, double>::const_iterator jt;
+    std::unordered_map<int, double>::const_iterator jt;
   };
 
   ////////////////////////////////////////////////////////////////
@@ -150,7 +148,7 @@ class sp_stat_vec_t {
 
   int max_dim;  // maximum dimension index
   int min_dim;  // minimum dimension index
-  unordered_map<int, double> data;
+  std::unordered_map<int, double> data;
 };
 
 // inner product of two vectors
@@ -182,7 +180,7 @@ bool approx_equal(const sp_stat_vec_t &x, const sp_stat_vec_t &y);
 // * row-major sparse matrix
 class sp_stat_mat_t {
  public:
-  typedef unordered_map<int, sp_stat_vec_t *> data_map_t;
+  typedef std::unordered_map<int, sp_stat_vec_t *> data_map_t;
 
   sp_stat_mat_t() {}
   sp_stat_mat_t(const sp_stat_mat_t &);

@@ -1,48 +1,43 @@
+////////////////////////////////////////////////////////////////
 // a simple binary tree class
 // (c) Yongjin Park, 2012
 
-#include <algorithm>
-#include <boost/shared_ptr.hpp>
-#include <cassert>
 #include <cmath>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <sstream>
+#include <memory>
+#include <unordered_map>
 #include <vector>
-#include "distrib.hh"
-
-using namespace std;
-using namespace boost;
+#include "rcpp_util.hh"
 
 #ifndef BTREE_HH_
 #define BTREE_HH_
 
+////////////////////////////////////////////////////////////////
 // To find trailing zeros efficiently
 // (source http://graphics.stanford.edu/~seander/bithacks.html)
 static const int MultiplyDeBruijnBitPosition[32] = {
     0,  1,  28, 2,  29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4,  8,
     31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6,  11, 5,  10, 9};
 
-#define tree_return_false(msg)               \
-  {                                          \
-    cerr << "[TREE] Error: " << msg << endl; \
-    return false;                            \
+#define tree_return_false(msg)                           \
+  {                                                      \
+    Rcpp::Rcerr << "[TREE] Error: " << msg << std::endl; \
+    return false;                                        \
   }
-#define tree_throw(msg)                      \
-  {                                          \
-    cerr << "[TREE] Error: " << msg << endl; \
-    exit(1);                                 \
+#define tree_throw(msg)                                  \
+  {                                                      \
+    Rcpp::Rcerr << "[TREE] Error: " << msg << std::endl; \
+    exit(1);                                             \
   }
 #define tree_message(msg) \
-  { cerr << "[TREE] " << msg << endl; }
+  { Rcpp::Rcerr << "[TREE] " << msg << std::endl; }
 
+////////////////////////////////////////////////////////////////
 // fixed binary tree class
-template <typename Distrib>
+template <typename D>
 class btree_t {
  public:
-  typedef Distrib node_data_t;
-  typedef boost::shared_ptr<node_data_t> node_data_ptr_t;
+  typedef D node_data_t;
+  typedef std::shared_ptr<node_data_t> node_data_ptr_t;
 
  private:
   // we use conventional binary heap-like tree
@@ -68,10 +63,9 @@ class btree_t {
   // we use in-order traversal index
   // LCA(x,y) could be done in O(1)
 
-  vector<int> inorder2tree;  // inorder idx -> tree idx
-  vector<int> tree2inorder;  // tree idx -> inorder idx
-
-  vector<node_data_ptr_t> node_data_map;
+  std::vector<int> inorder2tree;  // inorder idx -> tree idx
+  std::vector<int> tree2inorder;  // tree idx -> inorder idx
+  std::vector<node_data_ptr_t> node_data_map;
 
   // private helper functions
   void init();
@@ -148,36 +142,30 @@ class btree_t {
 
     const int hash() { return id; }
 
-    boost::shared_ptr<node_t> get_pa() {
+    std::shared_ptr<node_t> get_pa() {
 #ifdef DEBUG
       assert(has_pa());
 #endif
 
       int id_pa = tree.pa_idx(id);
-      //       node_data_t& nd_pa = *(tree.node_data_map[id_pa].get());
-      //       return node_ptr_t( new node_t(id_pa, nd_pa, tree) );
       return tree.node_obj_map[id_pa];
     }
 
-    boost::shared_ptr<node_t> get_left() {
+    std::shared_ptr<node_t> get_left() {
 #ifdef DEBUG
       assert(!is_leaf());
 #endif
 
       int id_left = tree.left_idx(id);
-      //       node_data_t& nd_left = *(tree.node_data_map[id_left].get());
-      //       return node_ptr_t( new node_t(id_left, nd_left, tree) );
       return tree.node_obj_map[id_left];
     }
 
-    boost::shared_ptr<node_t> get_right() {
+    std::shared_ptr<node_t> get_right() {
 #ifdef DEBUG
       assert(!is_leaf());
 #endif
 
       int id_right = tree.right_idx(id);
-      //       node_data_t& nd_right = *(tree.node_data_map[id_right].get());
-      //       return node_ptr_t( new node_t(id_right, nd_right, tree) );
       return tree.node_obj_map[id_right];
     }
 
@@ -187,7 +175,7 @@ class btree_t {
  public:
   friend class node_t;
 
-  typedef boost::shared_ptr<node_t> node_ptr_t;
+  typedef std::shared_ptr<node_t> node_ptr_t;
 
   node_ptr_t root_node_obj();
   node_ptr_t left_node_obj(node_ptr_t node);
@@ -206,7 +194,7 @@ class btree_t {
  private:
   // pre-generated map
   // node idx to node pointer
-  vector<boost::shared_ptr<node_t> > node_obj_map;
+  std::vector<std::shared_ptr<node_t> > node_obj_map;
 };
 
 ///////////////////////////////////////////////////////////////
@@ -239,12 +227,13 @@ void btree_t<D>::init() {
 template <typename D>
 void btree_t<D>::clear() {}
 
+////////////////////////////////////////////////////////////////
 // Recursively build a inorder traversal
 template <typename D>
 void btree_t<D>::dfs_inorder_idx(int root, int& idx) {
   int left = left_idx(root);
   int right = right_idx(root);
-  if (min(left, right) >= ntot) {  // can't go further down
+  if (std::min(left, right) >= ntot) {  // can't go further down
     inorder2tree[idx] = root;
     tree2inorder[root] = idx;
     ++idx;
@@ -286,6 +275,7 @@ int btree_t<D>::leaf_internal_idx(int k) const {
 #endif
 }
 
+////////////////////////////////////////////////////////////////
 // find the number of trailing zeros in 32-bit v
 template <typename D>
 int btree_t<D>::count_zeros_right(int v) const {
@@ -294,6 +284,7 @@ int btree_t<D>::count_zeros_right(int v) const {
   return r;
 }
 
+////////////////////////////////////////////////////////////////
 // Fast access of lowest common ancestor of leaf_x and leaf_y
 // implemetation of Moufatich (2008)
 // takes internal index of (x, y) in [ leaf_offset .. ntot )
@@ -311,7 +302,7 @@ int btree_t<D>::get_lca(int xi, int yi) const {
   int xy_xor = x ^ y;           // take difference of two bits
   idx1 = (int)log2(xy_xor);     // position of leftmost 1-bit
   idx2 = count_zeros_right(x);  // #0's until rightmost 1-bit
-  idx = max(idx1, idx2);        //
+  idx = std::max(idx1, idx2);   //
   idx3 = count_zeros_right(y);  // #0's until rightmost 1-bit
   if (idx3 > idx) {
     lca = y;
@@ -323,6 +314,7 @@ int btree_t<D>::get_lca(int xi, int yi) const {
   return inorder2tree.at(lca - 1);
 }
 
+////////////////////////////////////////////////////////////////
 // lca node idx
 template <typename D>
 int btree_t<D>::get_lca_idx(int leaf_x, int leaf_y) const {
@@ -333,7 +325,7 @@ int btree_t<D>::get_lca_idx(int leaf_x, int leaf_y) const {
 
 template <typename D>
 btree_t<D>::btree_t(int _depth) {
-  depth = max(1, _depth);  // depth should be at least 2
+  depth = std::max(1, _depth);  // depth should be at least 2
   init();
 }
 
@@ -342,6 +334,7 @@ btree_t<D>::~btree_t() {
   clear();
 }
 
+////////////////////////////////////////////////////////////////
 // leaf_x, leaf_y in [0 .. #leaves)
 template <typename D>
 typename btree_t<D>::node_data_t& btree_t<D>::get_lca_node(int leaf_x,

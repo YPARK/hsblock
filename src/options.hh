@@ -1,9 +1,6 @@
 #ifndef OPTIONS_HH_
 #define OPTIONS_HH_
 
-#include <string>
-#include <vector>
-
 struct options_t {
   explicit options_t() {
     VBITER = 2000;
