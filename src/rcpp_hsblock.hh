@@ -5,9 +5,6 @@
 // [[Rcpp::depends(RcppProgress)]]
 #include <progress.hpp>
 
-using namespace Rcpp;
-
-#include <Eigen/Eigenvalues>
 #include <algorithm>
 #include <numeric>
 #include <random>
@@ -22,6 +19,9 @@ using namespace Rcpp;
 #include "sparse_data_func.hh"
 #include "tuple_util.hh"
 
+#include "hsb_data.hh"
+#include "mathutil.hh"
+
 #ifndef RCPP_HSBLOCK_HH_
 #define RCPP_HSBLOCK_HH_
 
@@ -31,62 +31,123 @@ using SpMat = Eigen::SparseMatrix<double, Eigen::ColMajor>;
 using Scalar = Mat::Scalar;
 using Index = Mat::Index;
 
-template<typename Tree>
-struct hsblock_inference_t {
+////////////////////////////////////////////////////////////////
+// A collection of functors needed for inference in btree
+template <typename Tree>
+struct hsb_update_func_t {
+  using Node = typename Tree::node_ptr_t;
+  using Data = typename Tree::node_data_t;
+  using Scalar = typename Data::Unit;
 
-  using Node = typename Tree::Node;
+  explicit hsb_update_func_t(Mat& cc, Mat& zz)
+      : C(cc), Z(zz), N(zz.cols()), n(cc.rows()), K(cc.cols()) {
+#ifdef DEBUG
+    ASSERT(C.rows() == n && C.cols() == K,    // match dim
+           "C [" << n << " x " << K << "]");  //
+    ASSERT(Z.rows() == n && Z.cols() == K,    // match dim
+           "Z [" << n << " x " << K << "]");  //
+#endif
+  }
 
-  void merge_left_right(Node left,
-			Node right,
-			Node parent) {
-    // Data& deg2left = left.data.deg;
-    // Data& deg2right = right.data.deg;
-    // parent.data.deg = deg2left + deg2right;
+  void init() {
+
+    // 1. clear tree data to zero
+
+    N = Z.transpose() * Mat::Ones(n, 1);
+
+    // 2. collect statistics
+    // for each network vertex
+
+    // 3. 
 
   }
 
 
+  // Initialize tree model with respect to Z
+  void clear_tree_data(Node r) {
+    if (r->is_leaf()) {
+      init(r->data);
+    } else {
+      init_tree_data(r->get_left());
+      init_tree_data(r->get_right());
+      init(r->data);
+    }
+  }
 
-};
+  // TODO: _collect_tree_stat
+
+  // collect statistics in tree
+  void init_tree_stat(Node r, Index ii) {
+    if (r->is_leaf()) {
+      const Index kk = r->leaf_idx();
+      const Scalar z_ik = Z(ii, kk);
+      const Scalar d_ik = C(ii, kk);
+      const Scalar n_k = N(kk);
+
+      // statistics to push up
+      r->data.delta_stat_edge = d_ik;
+      r->data.delta_stat_total = z_ik;
+
+      const Scalar half = 0.5;
+
+      // E = sum_ij A_ij z_ik z_jk / 2 + sum_i z_ik e_i
+      //     sum_i [ d_ik * z_ik / 2 + e_i * z_ik]
+      const Scalar dE = d_ik * half;
+
+      // T = sum_ij z_ik z_jk I[i!=j] / 2
+      //   = sum_i [ z_ik * (n_k-z_ik) /2 ]
+      const Scalar dT = z_ik * (n_k - z_ik) * half;
+
+      // increase stat edge and stat total
+      r->data.stat_edge += dE;
+      r->data.stat_total += dT;
+
+      return;
+    }
+  }
 
 
-struct tag_bottom {};
-struct tag_inter {};
 
-template<typename Tree,
-	 typename LeafFun,
-	 typename LRFun,
-	 typename Opt>
-void eval_local_score(typename Tree::node_ptr_t r,
-		      LeafFun& Fleaf,
-		      LRFun& Flr,
-		      Opt& opt)
-{			  
+  // collect partial statistics with respect to vertex ii
+  void collect_delta_stat(Node r, Index ii) {
+    if (r->is_leaf()) {
+      const Index k = r->leaf_idx();
+      const Scalar d_ik = C(ii, k);
+      const Scalar nk = Z(ii, k);
 
-  if(r->is_leaf()) {
-    LeafFun(r->data, opt);
+      r->data.delta_stat_edge = d_ik;
+
+      // r->data.delta
+
+      return;
+    }
+    collect_delta_stat(r->get_left(), ii);
+    collect_delta_stat(r->get_right(), ii);
+
+    merge_left_right_delta(r->get_left()->data,   // left
+                           r->get_right()->data,  // right
+                           r->data);
+
+    dump(r->data);
+
     return;
   }
 
-  // in-order traversal
-  eval_local_score(r->get_left(), Fleaf, Flr, opt);
-  eval_local_score(r->get_right(), Fleaf, Flr, opt);
+  // TODO: remove ii from current cluster
 
-  // opt.Fun(r->data)
+  // TODO: assign ii to a new cluster
 
-  // accumuate
-  //
-  // opt.Fun(left, right, r)
-  //
-  // r.data = (r->get_left()).data + (r->get_right()).data;
+  Mat& C;  // n x K cluster degree matrix
+  Mat& Z;  // n x K latent membership matrix
+  Vec N;   // K x 1 size vector
 
+  const Index n;
+  const Index K;
 
-
-  return;
-}
-
-
-
+  // const SpMat A;  // n x n adjacency matrix for this snapshot
+  // Mat ClustDeg;
+  // C = A * Z = [n x n] * [n x K]
+};
 
 // score_func(sufficient_stat_data, new_edge, new_tot)
 
@@ -94,13 +155,12 @@ void eval_local_score(typename Tree::node_ptr_t r,
 
 // tot_func(G, Volume, Size)
 
-
 // TODO: use functor, template
 
 // template<typename TreeNodePtr, typename Graph>
 // struct hsblock_score_t {
 
-//   Scalar calc_degree_sum(TreeNodePtr r, Index curr_i) { 
+//   Scalar calc_degree_sum(TreeNodePtr r, Index curr_i) {
 //     Scalar ret = 0.0;
 //     if(r -> is_leaf()) { // bottom
 //       int k = r->leaf_idx();
@@ -121,8 +181,6 @@ void eval_local_score(typename Tree::node_ptr_t r,
 
 //   Scalar calc_tot_sum(TreeNodePtr r) {
 //   }
-
-
 
 //   template<typename F>
 //   Scalar calc_partial_score(TreeNodePtr r, F score_func) {
@@ -146,20 +204,16 @@ void eval_local_score(typename Tree::node_ptr_t r,
 //   // Mat ;
 
 //   // node_data_t& D = r->data;
-  
-//   sp_stat_mat_t clust_deg_mat;    // vertex x cluster
 
+//   sp_stat_mat_t clust_deg_mat;    // vertex x cluster
 
 //   // memoorary statistics
 //   sp_stat_vec_t memo_deg_sum;     // tree node x 1
 //   sp_stat_vec_t memo_tot_sum;     // tree node x 1
 //   sp_stat_vec_t memo_left_score;  // tree node x 1
 //   sp_stat_vec_t memo_right_score; // tree node x 1
-  
+
 //   const Graph& G;
 // };
-
-
-
 
 #endif
