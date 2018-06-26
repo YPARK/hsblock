@@ -90,9 +90,9 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
 
       // b. Remove ii's contribution on C, Z, N
 
-      // C -= Z.col(ii) * A.row(ii);
-      // N -= Z.col(ii);
-      // Z.col(ii).setZero();
+      C -= Z.col(ii) * A.row(ii);
+      N -= Z.col(ii);
+      Z.col(ii).setZero();
 
       // don't forget the stat on the neighbors
       for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
@@ -114,9 +114,9 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
 
       // d. Add ii's contribution on C, Z, N
 
-      // Z(kk, ii) = 1.0;
-      // C += Z.col(ii) * A.row(ii);
-      // N += Z.col(ii);
+      Z(kk, ii) = 1.0;
+      C += Z.col(ii) * A.row(ii);
+      N += Z.col(ii);
 
       for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
 	Index jj = jt.index();

@@ -19,10 +19,10 @@
 #include "sparse_data_func.hh"
 #include "tuple_util.hh"
 
-#include "hsb_data.hh"
-#include "mathutil.hh"
 #include "eigen_sampler.hh"
 #include "eigen_util.hh"
+#include "hsb_data.hh"
+#include "mathutil.hh"
 
 #ifndef RCPP_HSBLOCK_HH_
 #define RCPP_HSBLOCK_HH_
@@ -212,13 +212,13 @@ struct hsb_update_func_t {
       // E = sum_ij A_ij sum_{l in L} sum_{r in R} z_il z_jr
       //     sum_i sum_{l in L} z_il sum_{r in R} sum_j A_ij z_jr
       //     sum_i ( n_iL * d_iR )
-      const Scalar dE = niL * diR;
+      const Scalar dE = niL * diR + niR * diL;
 
       // T = sum_{i!=j} sum_{l in L} sum_{r in R} z_il z_jr
       //   = sum_i sum_{l in L} z_il sum_{r in R} sum_{j!=i} z_jr
       //   = sum_i n_iL sum_{r in R} [ n_r - z_ir ]
       //   = sum_i [ n_iL (n_R - n_iR) ]
-      const Scalar dT = niL * (nR - niR);
+      const Scalar dT = niL * (nR - niR) + niR * (nL - niL);
 
       // increase stat edge and stat total
       r->data.stat_edge = op(r->data.stat_edge, dE);
