@@ -21,13 +21,15 @@
 
 #include "hsb_data.hh"
 #include "mathutil.hh"
+#include "eigen_sampler.hh"
+#include "eigen_util.hh"
 
 #ifndef RCPP_HSBLOCK_HH_
 #define RCPP_HSBLOCK_HH_
 
-using Mat = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
-using Vec = Eigen::Matrix<double, Eigen::Dynamic, 1>;
-using SpMat = Eigen::SparseMatrix<double, Eigen::ColMajor>;
+using Mat = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
+using Vec = Eigen::Matrix<float, Eigen::Dynamic, 1>;
+using SpMat = Eigen::SparseMatrix<float, Eigen::ColMajor>;
 using Scalar = Mat::Scalar;
 using Index = Mat::Index;
 
@@ -39,181 +41,191 @@ struct hsb_update_func_t {
   using Data = typename Tree::node_data_t;
   using Scalar = typename Data::Unit;
 
-  explicit hsb_update_func_t(Mat& cc, Mat& zz)
-      : C(cc), Z(zz), N(zz.cols()), n(cc.rows()), K(cc.cols()) {
+  explicit hsb_update_func_t(Mat& cc, Mat& zz, Vec& nn)
+      : C(cc),
+        Z(zz),
+        N(nn),
+        delta_score(zz.rows()),
+        n(cc.cols()),
+        K(cc.rows()) {
 #ifdef DEBUG
-    ASSERT(C.rows() == n && C.cols() == K,    // match dim
-           "C [" << n << " x " << K << "]");  //
-    ASSERT(Z.rows() == n && Z.cols() == K,    // match dim
-           "Z [" << n << " x " << K << "]");  //
+    ASSERT(C.rows() == K && C.cols() == n,    // match dim
+           "C [" << K << " x " << n << "]");  //
+    ASSERT(Z.rows() == K && Z.cols() == n,    // match dim
+           "Z [" << K << " x " << n << "]");  //
+    ASSERT(N.rows() == K && N.cols() == 1,    // match dim
+           "N [" << K << " x " << 1 << "]");  //
 #endif
   }
-
-  void init() {
-
-    // 1. clear tree data to zero
-
-    N = Z.transpose() * Mat::Ones(n, 1);
-
-    // 2. collect statistics
-    // for each network vertex
-
-    // 3. 
-
-  }
-
 
   // Initialize tree model with respect to Z
   void clear_tree_data(Node r) {
     if (r->is_leaf()) {
-      init(r->data);
+      clear(r->data);
     } else {
-      init_tree_data(r->get_left());
-      init_tree_data(r->get_right());
-      init(r->data);
+      clear_tree_data(r->get_left());
+      clear_tree_data(r->get_right());
+      clear(r->data);
     }
   }
 
-  // TODO: _collect_tree_stat
+  void increase_tree_stat(Node r, Index ii) {
+    auto inc_op = [](auto prev, auto delt) { return prev + delt; };
+    recursive_tree_delta_stat(r, ii);
+    recursive_tree_stat(r, ii, inc_op);
+  }
 
-  // collect statistics in tree
-  void init_tree_stat(Node r, Index ii) {
+  void decrease_tree_stat(Node r, Index ii) {
+    auto dec_op = [](auto prev, auto delt) { return prev - delt; };
+    recursive_tree_delta_stat(r, ii);
+    recursive_tree_stat(r, ii, dec_op);
+  }
+
+  const Vec& eval_tree_delta_score(Node r, Index ii) {
+    Scalar accum = 0.0;
+    recursive_tree_delta_stat(r, ii);
+    recursive_eval_delta_score(r, ii);
+    recursive_accum_delta_score(r, ii, accum);
+    return delta_score;
+  }
+
+  Mat& C;  // K x n cluster degree matrix
+  Mat& Z;  // K x n latent membership matrix
+  Vec& N;  // K x 1 size vector
+
+ private:
+  Vec delta_score;  // K x 1 delta_score vector
+
+  const Index n;
+  const Index K;
+
+ private:
+  // accumulate delta scores
+  inline void recursive_accum_delta_score(Node r, Index ii, Scalar accum) {
     if (r->is_leaf()) {
       const Index kk = r->leaf_idx();
-      const Scalar z_ik = Z(ii, kk);
-      const Scalar d_ik = C(ii, kk);
-      const Scalar n_k = N(kk);
+      const Scalar accum_tot = accum + r->data.delta_score;
+      delta_score(kk) = accum_tot;
+    } else {
+      Scalar accum_left = accum + r->data.delta_score_left;
+      Scalar accum_right = accum + r->data.delta_score_right;
+
+      // standardize
+      Scalar denom = std::max(accum_left, accum_right);
+      accum_left -= denom;
+      accum_right -= denom;
+
+      recursive_accum_delta_score(r->get_left(), ii, accum_left);
+      recursive_accum_delta_score(r->get_right(), ii, accum_right);
+    }
+  }
+
+  // evaluate delta score given delta statistics
+  inline void recursive_eval_delta_score(Node r, Index ii) {
+    if (r->is_leaf()) {
+      eval_delta_score(r->data);
+#ifdef DEBUG
+      // dump(r->data);
+#endif
+    } else {
+      auto left = r->get_left();
+      auto right = r->get_right();
+
+      recursive_eval_delta_score(left, ii);
+      recursive_eval_delta_score(right, ii);
+
+      // Choosing the left means modeling on the right
+      // using the delta_stat = (diR, nR)
+      eval_delta_left(r->data, right->data);
+
+      // Choosing the right means modeling on the left
+      // using the delta_stat = (diL, nL)
+      eval_delta_right(r->data, left->data);
+
+      eval_delta_score(r->data);
+
+#ifdef DEBUG
+      // dump(r->data);
+#endif
+    }
+  }
+
+  // collect partial statistics wrt ii
+  inline void recursive_tree_delta_stat(Node r, Index ii) {
+    if (r->is_leaf()) {
+      const Index kk = r->leaf_idx();
 
       // statistics to push up
-      r->data.delta_stat_edge = d_ik;
-      r->data.delta_stat_total = z_ik;
+      r->data.delta_stat_dik = C(kk, ii);
+      r->data.delta_stat_nik = Z(kk, ii);
+      r->data.delta_stat_nk = N(kk);
+
+    } else {
+      auto left = r->get_left();
+      auto right = r->get_right();
+      recursive_tree_delta_stat(left, ii);
+      recursive_tree_delta_stat(right, ii);
+      merge_left_right_delta(left->data, right->data, r->data);
+    }
+  }
+
+  // collect statistics in tree given delta statistics
+  template <typename Op>
+  inline void recursive_tree_stat(Node r, Index ii, Op op) {
+    if (r->is_leaf()) {
+      const Index kk = r->leaf_idx();
+
+      const Scalar d_ik = r->data.delta_stat_dik;
+      const Scalar z_ik = r->data.delta_stat_nik;
+      const Scalar n_k = r->data.delta_stat_nk;
 
       const Scalar half = 0.5;
 
       // E = sum_ij A_ij z_ik z_jk / 2 + sum_i z_ik e_i
       //     sum_i [ d_ik * z_ik / 2 + e_i * z_ik]
-      const Scalar dE = d_ik * half;
+      const Scalar dE = d_ik * z_ik * half;
 
       // T = sum_ij z_ik z_jk I[i!=j] / 2
       //   = sum_i [ z_ik * (n_k-z_ik) /2 ]
       const Scalar dT = z_ik * (n_k - z_ik) * half;
 
       // increase stat edge and stat total
-      r->data.stat_edge += dE;
-      r->data.stat_total += dT;
+      r->data.stat_edge = op(r->data.stat_edge, dE);
+      r->data.stat_total = op(r->data.stat_total, dT);
 
-      return;
+    } else {
+      auto left = r->get_left();
+      auto right = r->get_right();
+
+      recursive_tree_stat(left, ii, op);
+      recursive_tree_stat(right, ii, op);
+
+      const Scalar niL = left->data.delta_stat_nik;
+      const Scalar niR = right->data.delta_stat_nik;
+
+      const Scalar diL = left->data.delta_stat_dik;
+      const Scalar diR = right->data.delta_stat_dik;
+
+      const Scalar nL = left->data.delta_stat_nk;
+      const Scalar nR = right->data.delta_stat_nk;
+
+      // E = sum_ij A_ij sum_{l in L} sum_{r in R} z_il z_jr
+      //     sum_i sum_{l in L} z_il sum_{r in R} sum_j A_ij z_jr
+      //     sum_i ( n_iL * d_iR )
+      const Scalar dE = niL * diR;
+
+      // T = sum_{i!=j} sum_{l in L} sum_{r in R} z_il z_jr
+      //   = sum_i sum_{l in L} z_il sum_{r in R} sum_{j!=i} z_jr
+      //   = sum_i n_iL sum_{r in R} [ n_r - z_ir ]
+      //   = sum_i [ n_iL (n_R - n_iR) ]
+      const Scalar dT = niL * (nR - niR);
+
+      // increase stat edge and stat total
+      r->data.stat_edge = op(r->data.stat_edge, dE);
+      r->data.stat_total = op(r->data.stat_total, dT);
+      // dump(r->data);
     }
   }
-
-
-
-  // collect partial statistics with respect to vertex ii
-  void collect_delta_stat(Node r, Index ii) {
-    if (r->is_leaf()) {
-      const Index k = r->leaf_idx();
-      const Scalar d_ik = C(ii, k);
-      const Scalar nk = Z(ii, k);
-
-      r->data.delta_stat_edge = d_ik;
-
-      // r->data.delta
-
-      return;
-    }
-    collect_delta_stat(r->get_left(), ii);
-    collect_delta_stat(r->get_right(), ii);
-
-    merge_left_right_delta(r->get_left()->data,   // left
-                           r->get_right()->data,  // right
-                           r->data);
-
-    dump(r->data);
-
-    return;
-  }
-
-  // TODO: remove ii from current cluster
-
-  // TODO: assign ii to a new cluster
-
-  Mat& C;  // n x K cluster degree matrix
-  Mat& Z;  // n x K latent membership matrix
-  Vec N;   // K x 1 size vector
-
-  const Index n;
-  const Index K;
-
-  // const SpMat A;  // n x n adjacency matrix for this snapshot
-  // Mat ClustDeg;
-  // C = A * Z = [n x n] * [n x K]
 };
-
-// score_func(sufficient_stat_data, new_edge, new_tot)
-
-// degree_func(G, ClustDeg)
-
-// tot_func(G, Volume, Size)
-
-// TODO: use functor, template
-
-// template<typename TreeNodePtr, typename Graph>
-// struct hsblock_score_t {
-
-//   Scalar calc_degree_sum(TreeNodePtr r, Index curr_i) {
-//     Scalar ret = 0.0;
-//     if(r -> is_leaf()) { // bottom
-//       int k = r->leaf_idx();
-//       ret = clust_deg_mat(curr_i, k);
-//       memo_deg_sum(dim_t(r->hash()), ret);
-//       return ret;
-//     }
-
-//     Scalar deg2left = calc_degree_sum(r->get_left(), curr_i);
-//     Scalar deg2right = calc_degree_sum(r->get_right(), curr_i);
-
-//     memo_deg2left[r->hash()] = deg2left;
-//     memo_deg2right[r->hash()] = deg2right;
-
-//     ret = deg2left + deg2right;
-//     return ret;
-//   }
-
-//   Scalar calc_tot_sum(TreeNodePtr r) {
-//   }
-
-//   template<typename F>
-//   Scalar calc_partial_score(TreeNodePtr r, F score_func) {
-//     Scalar score = 0.0;
-//     if(r->is_leaf()){
-//       // dim_t rr(r->hash())
-//     // Scalar score = score_func(r->data,
-//     // memo_deg_sum(rr),
-//     // memo_tot_sum(rr));
-//       // memo_left_score
-//       return score;
-//     }
-
-//     // calc_partial_score(r->get_left()
-
-//     return score;
-//   }
-
-//   Index curr_vertex_index;
-
-//   // Mat ;
-
-//   // node_data_t& D = r->data;
-
-//   sp_stat_mat_t clust_deg_mat;    // vertex x cluster
-
-//   // memoorary statistics
-//   sp_stat_vec_t memo_deg_sum;     // tree node x 1
-//   sp_stat_vec_t memo_tot_sum;     // tree node x 1
-//   sp_stat_vec_t memo_left_score;  // tree node x 1
-//   sp_stat_vec_t memo_right_score; // tree node x 1
-
-//   const Graph& G;
-// };
 
 #endif

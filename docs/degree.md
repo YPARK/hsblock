@@ -1,5 +1,5 @@
 ---
-title: "Degree correction in large-scale network"
+title: "Degree correction of network edges"
 author: "Yongjin Park"
 ---
 

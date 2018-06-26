@@ -1,3 +1,5 @@
+#define DEBUG 1
+
 #include "rcpp_hsblock.hh"
 
 // adj_sexp = Matrix::sparseMatrix object
@@ -18,31 +20,25 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
 
   TLOG("depth = " << depth);
 
-  if(A.rows() != A.cols()) {
+  if (A.rows() != A.cols()) {
     ELOG("Invalid adjacency matrix");
     return Rcpp::List::create();
   }
 
-  if(A.rows() != Z.rows()) {
+  if (A.rows() != Z.cols()) {
     ELOG("Adj and Latent should match dimensionality (in rows)");
     return Rcpp::List::create();
   }
 
-  if(Z.cols() != (2 << (depth - 1))) {
+  if (Z.rows() != (1 << (depth - 1))) {
     ELOG("Number clusters should be 2^(depth - 1)");
     return Rcpp::List::create();
   }
 
-  // check
-
-  // Rcpp::traits::input_parameter<const Mat>::type C(c_sexp);
-  // Rcpp::traits::input_parameter<const Mat>::type Cdelta(c_delta_sexp);
-  // Rcpp::traits::input_parameter<const Mat>::type X(x_sexp);
-
   // Rcpp::List options_list(options_sexp);
   // options_t opt;
-
   // set_options_from_list(options_list, opt);
+
   // return Rcpp::wrap(impl_fit_zqtl(effect, effect_se, X, C, Cdelta, opt));
 
   using tree_data_t = hsb_bern_t<Scalar>;
@@ -52,32 +48,93 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
   // For each newtok, we pre-calculate cluster-specific degree matrix
   //
 
-  Mat C = A * Z;
-  model_tree_t tree(depth);
-  update_t update_func(C, Z);
+  Index n = A.rows();
+  Mat C = Z * A;
+  Vec N = Z * Mat::Ones(n, 1);
+  model_tree_t tree(depth - 1);
+  update_t update_func(C, Z, N);
+
+  if (tree.num_leaves() != Z.rows()) {
+    ELOG("Tree and latent matrix do match");
+    return Rcpp::List::create();
+  }
 
   auto root = tree.root_node_obj();
 
-  // 1. initialize the tree model
+  std::random_device rd;
+  std::mt19937 rng(rd());
+  const Index K = Z.rows();
+  discrete_sampler_t<Vec> discrete(K);
+
+  // 1. Initialize the tree model
   update_func.clear_tree_data(root);
 
-  Index ii = 0;
+  for (Index ii = 0; ii < n; ++ii) {
+    update_func.increase_tree_stat(root, ii);
+  }
 
-  update_func.collect_delta_stat(root, ii);
+  // 2. For each vertex: update cluster membership
+  running_stat_t<Mat> Zstat(K, n);
 
-  // 2. initialize the latent variable matrix
-  // 3. calculate cluster-specific deree matrix
-  // 4. for each vertex: update cluster membership
-  //   a. remove current assignment
-  //   b. delta-update cluster-specific degree, bottom
-  //   c. calculate assignment score
-  //   d. make a change
-  //   e. delta-update cluster-specific degree, bottom
-  // 5. update the tree model
-  //   a. take gradient
-  //   b. update using ADAM?
+  for (Index iter = 0; iter < 10; ++iter) {
+    for (Index ii = 0; ii < n; ++ii) {
+      // a. Remove ii's contribution on the tree
+      update_func.decrease_tree_stat(root, ii);
 
+      // don't forget the stat on the neighbors
+      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+	Index jj = jt.index();
+	if(jj == ii) continue;
+	update_func.decrease_tree_stat(root, jj);
+      }
+
+      // b. Remove ii's contribution on C, Z, N
+
+      // C -= Z.col(ii) * A.row(ii);
+      // N -= Z.col(ii);
+      // Z.col(ii).setZero();
+
+      // don't forget the stat on the neighbors
+      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+	Index jj = jt.index();
+	if(jj == ii) continue;
+	update_func.increase_tree_stat(root, jj);
+      }
+
+      // c. calculate delta score
+      const Vec& log_score = update_func.eval_tree_delta_score(root, ii);
+
+      Index kk = discrete(log_score, rng);
+
+      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+	Index jj = jt.index();
+	if(jj == ii) continue;
+	update_func.decrease_tree_stat(root, jj);
+      }
+
+      // d. Add ii's contribution on C, Z, N
+
+      // Z(kk, ii) = 1.0;
+      // C += Z.col(ii) * A.row(ii);
+      // N += Z.col(ii);
+
+      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+	Index jj = jt.index();
+	if(jj == ii) continue;
+	update_func.increase_tree_stat(root, jj);
+      }
+
+      // f. Add ii's contribution on the tree
+      update_func.increase_tree_stat(root, ii);
+    }
+
+    Zstat(Z);
+    TLOG("Update Z");
+  }
+
+  Mat Zmean = Zstat.mean();
+
+  return Rcpp::List::create(Rcpp::_["Z"] = Zmean);
   END_RCPP
-
-  return Rcpp::List::create();
+  // return Rcpp::wrap(impl_fit_zqtl(effect, effect_se, X, C, Cdelta, opt));
 }

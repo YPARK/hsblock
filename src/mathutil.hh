@@ -45,6 +45,18 @@ struct inv_op_t {
   const T eps = 1e-8;
 };
 
+template<typename T>
+T log_sum(T log_a, T log_b) {
+  T ret;
+  const T one_val = static_cast<T>(1.0);
+  if (log_a < log_b) {
+    ret = log_b + fasterlog(one_val + fasterexp(log_a - log_b));
+  } else {
+    ret = log_a + fasterlog(one_val + fasterexp(log_b - log_a));
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // log(1 + exp(x)) = log(exp(x - x) + exp(x))
 //                 = log(exp(x)*(1 + exp(-x)))

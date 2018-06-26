@@ -34,6 +34,16 @@ void eval_delta_score(DT& dt) {
 }
 
 template <typename DT>
+void eval_delta_left(DT& dt, const DT& right) {
+  impl_eval_delta_left(dt, right, distrib_tag<DT>());
+}
+
+template <typename DT>
+void eval_delta_right(DT& dt, const DT& left) {
+  impl_eval_delta_right(dt, left, distrib_tag<DT>());
+}
+
+template <typename DT>
 void merge_left_right_delta(const DT& left, const DT& right, DT& intern) {
   impl_merge_left_right_delta(left, right, intern, distrib_tag<DT>());
 }
