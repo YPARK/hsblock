@@ -5,16 +5,17 @@
 // adj_sexp = Matrix::sparseMatrix object
 
 // [[Rcpp::export]]
-RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
-  // SEXP Adj, SEXP effect_se_sexp, SEXP x_sexp,
-  //                              SEXP c_sexp, SEXP c_delta_sexp,
-
+RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   BEGIN_RCPP
 
   Rcpp::traits::input_parameter<const SpMat>::type adj(adj_sexp);
   Rcpp::traits::input_parameter<Mat>::type latent_init(z_sexp);
-  Rcpp::traits::input_parameter<Index>::type depth(depth_sexp);
+  Rcpp::List options_list(options_sexp);
 
+  options_t opt;
+  set_options_from_list(options_list, opt);
+
+  const Index depth = opt.tree_depth();
   SpMat A = adj;
   Mat Z = latent_init;
 
@@ -34,10 +35,6 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
     ELOG("Number clusters should be 2^(depth - 1)");
     return Rcpp::List::create();
   }
-
-  // Rcpp::List options_list(options_sexp);
-  // options_t opt;
-  // set_options_from_list(options_list, opt);
 
   // return Rcpp::wrap(impl_fit_zqtl(effect, effect_se, X, C, Cdelta, opt));
 
@@ -61,8 +58,7 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
 
   auto root = tree.root_node_obj();
 
-  std::random_device rd;
-  std::mt19937 rng(rd());
+  std::mt19937 rng(opt.rseed());
   const Index K = Z.rows();
   discrete_sampler_t<Vec> discrete(K);
 
@@ -73,19 +69,32 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
     update_func.increase_tree_stat(root, ii);
   }
 
+  update_func.dump_tree_data(root);
+
   // 2. For each vertex: update cluster membership
   running_stat_t<Mat> Zstat(K, n);
 
-  for (Index iter = 0; iter < 10; ++iter) {
+  // Must keep this progress obj; otherwise segfault will occur
+  Progress prog(opt.vbiter(), !opt.verbose());
+  Vec llik(opt.vbiter());
+
+  for (Index iter = 0; iter < opt.vbiter(); ++iter) {
+
+    if (Progress::check_abort()) {
+      break;
+    }
+    prog.increment();
+
     for (Index ii = 0; ii < n; ++ii) {
       // a. Remove ii's contribution on the tree
       update_func.decrease_tree_stat(root, ii);
 
       // don't forget the stat on the neighbors
-      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
-	Index jj = jt.index();
-	if(jj == ii) continue;
-	update_func.decrease_tree_stat(root, jj);
+
+      for (SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+        Index jj = jt.index();
+        if (jj == ii) continue;
+        update_func.decrease_tree_stat(root, jj);
       }
 
       // b. Remove ii's contribution on C, Z, N
@@ -94,11 +103,14 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
       N -= Z.col(ii);
       Z.col(ii).setZero();
 
+      update_func.increase_tree_stat(root, ii);
+
       // don't forget the stat on the neighbors
-      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
-	Index jj = jt.index();
-	if(jj == ii) continue;
-	update_func.increase_tree_stat(root, jj);
+
+      for (SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+        Index jj = jt.index();
+        if (jj == ii) continue;
+        update_func.increase_tree_stat(root, jj);
       }
 
       // c. calculate delta score
@@ -106,35 +118,48 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP depth_sexp) {
 
       Index kk = discrete(log_score, rng);
 
-      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
-	Index jj = jt.index();
-	if(jj == ii) continue;
-	update_func.decrease_tree_stat(root, jj);
+      // remove temporary
+
+      for (SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+        Index jj = jt.index();
+        if (jj == ii) continue;
+        update_func.decrease_tree_stat(root, jj);
       }
 
       // d. Add ii's contribution on C, Z, N
+
+      update_func.decrease_tree_stat(root, ii);
 
       Z(kk, ii) = 1.0;
       C += Z.col(ii) * A.row(ii);
       N += Z.col(ii);
 
-      for(SpMat::InnerIterator jt(A, ii); jt; ++jt) {
-	Index jj = jt.index();
-	if(jj == ii) continue;
-	update_func.increase_tree_stat(root, jj);
+      for (SpMat::InnerIterator jt(A, ii); jt; ++jt) {
+        Index jj = jt.index();
+        if (jj == ii) continue;
+        update_func.increase_tree_stat(root, jj);
       }
 
       // f. Add ii's contribution on the tree
       update_func.increase_tree_stat(root, ii);
     }
 
+    // Compute log-likelihood
+    Scalar score = update_func.eval_tree_score(root);
+    llik(iter) = score;
+
+    TLOG("Iter = " << iter << ", Score = " << score);
+
+    // if (opt.verbose()) conv.print(Rcpp::Rcerr);
     Zstat(Z);
-    TLOG("Update Z");
   }
+
+  update_func.dump_tree_data(root);
 
   Mat Zmean = Zstat.mean();
 
-  return Rcpp::List::create(Rcpp::_["Z"] = Zmean);
+  return Rcpp::List::create(Rcpp::_["Z"] = Zmean,
+			    Rcpp::_["llik"] = llik);
   END_RCPP
   // return Rcpp::wrap(impl_fit_zqtl(effect, effect_se, X, C, Cdelta, opt));
 }

@@ -7,7 +7,7 @@ library(dplyr)
 options(stringsAsFactors = FALSE)
 
 ## Read football pairs and construct Adj matrix
-pairs <- read.table('football.pairs')
+pairs <- read.table('data/football.pairs')
 nodes <- unlist(pairs) %>% unique() %>% sort()
 nodes.tab <- data.frame(v = nodes) %>%
     mutate(i = 1:n())
@@ -29,20 +29,17 @@ A[A > 1] <- 1
 Sys.setenv("PKG_CXXFLAGS"="-std=c++14 -Wno-unknown-pragmas")
 sourceCpp('src/rcpp_hsblock.cc', verbose = TRUE)
 
-depth <- 5
+depth <- 2
 K <- 2 ** (depth - 1)
-Z <- matrix(runif(n * K), nrow = K, ncol = n)
-Z <- sweep(Z, 2, apply(Z, 2, sum), `/`)
+Z <- sparseMatrix(i = sample(K, n, replace = TRUE), j = 1:n, x = rep(1, n),
+                  dims = c(K, n))
+Z <- as.matrix(Z)
 
-temp = rcpp_hsblock(A, Z, depth)
+temp = rcpp_hsblock(A, Z, list(tree.depth = depth, vbiter = 1000))
 
-
-c.check = temp$Z %*% A
-
-
+plot(temp$llik, log='x', pch = 19, cex = .5)
 
 oo <- order(apply(temp$Z, 2, which.max))
-
-
 image(A[oo, oo])
+
 

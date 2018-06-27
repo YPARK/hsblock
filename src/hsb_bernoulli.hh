@@ -30,7 +30,7 @@ struct hsb_bern_t {
 template <typename DT>
 inline void impl_clear(DT& data, tag_bernoulli) {
   data.a0 = 1.0;
-  data.b0 = 1e-1;
+  data.b0 = 1.0;
   data.stat_edge = 0.0;
   data.stat_total = 0.0;
   data.score = 0.0;
@@ -73,9 +73,9 @@ inline void impl_eval_delta_score(DT& D, tag_bernoulli) {
   static typename DT::Unit TOL = 1e-4;
 
 #ifdef DEBUG
-  ASSERT(D.delta_stat_dik <= D.delta_stat_nk,
+  ASSERT(D.delta_stat_dik <= (D.delta_stat_nk + TOL),
          "dik <= nk : " << D.delta_stat_dik << " vs " << D.delta_stat_nk);
-  ASSERT(D.stat_edge <= D.stat_total,
+  ASSERT(D.stat_edge <= (D.stat_total + TOL),
          "[bottom] edge <= total : " << D.stat_edge << " vs " << D.stat_total);
 #endif
 

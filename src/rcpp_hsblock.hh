@@ -12,11 +12,9 @@
 #include <vector>
 
 #include "btree.hh"
-#include "cnetwork.hh"
 #include "options.hh"
+#include "rcpp_options.hh"
 #include "rcpp_util.hh"
-#include "sparse_data.hh"
-#include "sparse_data_func.hh"
 #include "tuple_util.hh"
 
 #include "eigen_sampler.hh"
@@ -87,6 +85,28 @@ struct hsb_update_func_t {
     recursive_eval_delta_score(r, ii);
     recursive_accum_delta_score(r, ii, accum);
     return delta_score;
+  }
+
+  Scalar eval_tree_score(Node r) {
+    if (r->is_leaf()) {
+      eval_score(r->data);
+      return r->data.score;
+    } else {
+      Scalar sc_left = eval_tree_score(r->get_left());
+      Scalar sc_right = eval_tree_score(r->get_right());
+      eval_score(r->data);
+      return sc_left + sc_right;
+    }
+  }
+
+  void dump_tree_data(Node r) {
+    if (r->is_leaf()) {
+      dump(r->data);
+    } else {
+      dump_tree_data(r->get_left());
+      dump_tree_data(r->get_right());
+      dump(r->data);
+    }
   }
 
   Mat& C;  // K x n cluster degree matrix
@@ -172,14 +192,14 @@ struct hsb_update_func_t {
   // collect statistics in tree given delta statistics
   template <typename Op>
   inline void recursive_tree_stat(Node r, Index ii, Op op) {
+    const Scalar half = 0.5;
+
     if (r->is_leaf()) {
       const Index kk = r->leaf_idx();
 
       const Scalar d_ik = r->data.delta_stat_dik;
       const Scalar z_ik = r->data.delta_stat_nik;
       const Scalar n_k = r->data.delta_stat_nk;
-
-      const Scalar half = 0.5;
 
       // E = sum_ij A_ij z_ik z_jk / 2 + sum_i z_ik e_i
       //     sum_i [ d_ik * z_ik / 2 + e_i * z_ik]
@@ -213,7 +233,7 @@ struct hsb_update_func_t {
       //     sum_i sum_{l in L} z_il sum_{r in R} sum_j A_ij z_jr
       //     sum_i ( n_iL * d_iR )
       const Scalar dE = niL * diR + niR * diL;
-
+      
       // T = sum_{i!=j} sum_{l in L} sum_{r in R} z_il z_jr
       //   = sum_i sum_{l in L} z_il sum_{r in R} sum_{j!=i} z_jr
       //   = sum_i n_iL sum_{r in R} [ n_r - z_ir ]
@@ -221,8 +241,8 @@ struct hsb_update_func_t {
       const Scalar dT = niL * (nR - niR) + niR * (nL - niL);
 
       // increase stat edge and stat total
-      r->data.stat_edge = op(r->data.stat_edge, dE);
-      r->data.stat_total = op(r->data.stat_total, dT);
+      r->data.stat_edge = op(r->data.stat_edge, dE * half);
+      r->data.stat_total = op(r->data.stat_total, dT * half);
       // dump(r->data);
     }
   }
