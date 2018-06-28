@@ -17,16 +17,40 @@ template <typename T>
 using distrib_tag = typename data_traits<T>::Distrib;
 
 #include "hsb_bernoulli.hh"
+#include "hsb_poisson.hh"
 
 template <typename DT>
 void clear(DT& dt) {
   impl_clear(dt, distrib_tag<DT>());
 }
 
+template <typename DT, typename Scalar>
+void init_param_intern(DT& dt, DT& dt_left, DT& dt_right, const Scalar level) {
+  impl_init_param_intern(dt, dt_left, dt_right, level, distrib_tag<DT>());
+}
+
+template <typename DT, typename Scalar>
+void init_param(DT& dt, const Scalar level) {
+  impl_init_param(dt, level, distrib_tag<DT>());
+}
+
 template <typename DT>
 void dump(DT& dt) {
   impl_dump(dt, distrib_tag<DT>());
 }
+
+////////////////////////////
+// variational parameters //
+////////////////////////////
+
+template <typename DT, typename Scalar>
+void update(DT& dt, const Scalar rate) {
+  impl_update(dt, rate, distrib_tag<DT>());
+}
+
+////////////////////////////////
+// evaluation of local scores //
+////////////////////////////////
 
 template <typename DT>
 void eval_delta_score(DT& dt) {
@@ -51,16 +75,6 @@ void merge_left_right_delta(const DT& left, const DT& right, DT& intern) {
 template <typename DT>
 void eval_score(DT& dt) {
   impl_eval_score(dt, distrib_tag<DT>());
-}
-
-template <typename DT>
-void resolve_delta(DT& dt) {
-  impl_resolve_delta(dt, distrib_tag<DT>());
-}
-
-template <typename DT, typename Scalar>
-void update_delta(DT& dt, const Scalar rate) {
-  impl_update_delta(dt, rate, distrib_tag<DT>());
 }
 
 #endif

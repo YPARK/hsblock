@@ -25,19 +25,20 @@ A <- sparseMatrix(i = pairs.tab$ii,
 A <- A + t(A)
 A[A > 1] <- 1
 
+A <- A * 2
 
 Sys.setenv("PKG_CXXFLAGS"="-std=c++14 -Wno-unknown-pragmas")
 sourceCpp('src/rcpp_hsblock.cc', verbose = TRUE)
 
-depth <- 2
+
+
+depth <- 5
 K <- 2 ** (depth - 1)
 Z <- sparseMatrix(i = sample(K, n, replace = TRUE), j = 1:n, x = rep(1, n),
                   dims = c(K, n))
 Z <- as.matrix(Z)
 
-temp = rcpp_hsblock(A, Z, list(tree.depth = depth, vbiter = 1000))
-
-plot(temp$llik, log='x', pch = 19, cex = .5)
+temp = rcpp_hsblock(A, Z, list(tree.depth = depth, inner.iter = 100, vbiter = 1))
 
 oo <- order(apply(temp$Z, 2, which.max))
 image(A[oo, oo])
