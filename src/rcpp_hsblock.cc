@@ -2,6 +2,10 @@
 
 #include "rcpp_hsblock.hh"
 
+
+
+
+
 // [[Rcpp::export]]
 RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   BEGIN_RCPP
@@ -57,16 +61,18 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   update_func.clear_tree_data();
   update_func.init_tree_var();
 
+  const Index n = Z.cols();
 
+  discrete_sampler_t<Vec> randK(Z.rows());
 
-  hsblock_latent_inference(update_func, rng, opt);
+  hsblock_latent_inference(n, randK, rng, opt, std::make_tuple(update_func));
 
-
+  update_func.dump_tree_data();
 
   // // For each newtok, we pre-calculate cluster-specific degree matrix
   // //
 
-  // // update_func.dump_tree_data(root);
+
 
   // // // Compute log-likelihood
   // // Scalar score = update_func.eval_tree_score(root);

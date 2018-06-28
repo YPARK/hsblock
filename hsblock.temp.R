@@ -30,8 +30,6 @@ A <- A * 2
 Sys.setenv("PKG_CXXFLAGS"="-std=c++14 -Wno-unknown-pragmas")
 sourceCpp('src/rcpp_hsblock.cc', verbose = TRUE)
 
-
-
 depth <- 5
 K <- 2 ** (depth - 1)
 Z <- sparseMatrix(i = sample(K, n, replace = TRUE), j = 1:n, x = rep(1, n),
@@ -42,5 +40,7 @@ temp = rcpp_hsblock(A, Z, list(tree.depth = depth, inner.iter = 100, vbiter = 1)
 
 oo <- order(apply(temp$Z, 2, which.max))
 image(A[oo, oo])
+
+
 
 

@@ -19,8 +19,7 @@ struct hsb_update_func_t {
         n(cc.cols()),
         K(cc.rows()),
         Zstat(cc.rows(), cc.cols()),
-        delta_score(zz.rows()),
-        randK(cc.rows()) {
+        delta_score(zz.rows()) {
 #ifdef DEBUG
     ASSERT(C.rows() == K && C.cols() == n,    // match dim
            "C [" << K << " x " << n << "]");  //
@@ -42,6 +41,11 @@ struct hsb_update_func_t {
       clear_tree_data(r->get_right());
       clear(r->data);
     }
+  }
+
+  void calibrate_cnz() {
+    C = Z * A;
+    N = Z * Mat::Ones(n, 1);
   }
 
   void init_tree_var() { init_tree_var(tree.root_node_obj()); }
@@ -101,6 +105,8 @@ struct hsb_update_func_t {
     }
   }
 
+  void dump_tree_data() { dump_tree_data(tree.root_node_obj()); }
+
   TT& tree;  // binary tree object
   SpMat& A;  // n x n adjaency matrix
   Mat& C;    // K x n cluster degree matrix
@@ -111,7 +117,10 @@ struct hsb_update_func_t {
   const Index K;
 
   running_stat_t<Mat> Zstat;
-  discrete_sampler_t<Vec> randK;
+
+  void reset_z_stat() { Zstat.reset(); }
+
+  void update_z_stat() { Zstat(Z); }
 
   /////////////////////////////////////////////
   // Note: this doesn't work in delta-update //
@@ -291,20 +300,53 @@ struct hsb_update_func_t {
   }
 };
 
-template <typename Update, typename RNG>
-void hsblock_latent_inference(Update& update_func, RNG& rng,
-                              const options_t& opt) {
-  const auto& A = update_func.A;
-  auto& C = update_func.C;
-  auto& Z = update_func.Z;
-  auto& N = update_func.N;
-  auto& tree = update_func.tree;
-  auto root = tree.root_node_obj();
+template <typename RandDisc, typename RNG, typename... UpdateFunc>
+void hsblock_latent_inference(const Index numVertex, RandDisc& randK, RNG& rng,
+                              const options_t& opt,
+                              std::tuple<UpdateFunc...>&& update_func_tup) {
+  const Index K = randK.K;
 
-  auto& Zstat = update_func.Zstat;
-  auto& randK = update_func.randK;
+  Index vertex_ii = 0;   // vertex index
+  Index cluster_kk = 0;  // cluster index
 
-  Zstat.reset();
+  Vec logScore(K);
+
+  auto init_func = [](auto&& func) {
+    func.calibrate_cnz();
+    func.reset_z_stat();
+  };
+
+  auto accum_eval = [&logScore, &vertex_ii](auto&& func) {
+    logScore += func.eval_tree_delta_score(vertex_ii);
+  };
+
+  auto discount_matrix = [&vertex_ii](auto&& func) {
+
+    const SpMat& A = func.A;
+    Mat& C = func.C;
+    Mat& Z = func.Z;
+    Vec& N = func.N;
+
+    C -= Z.col(vertex_ii) * A.row(vertex_ii);
+    N -= Z.col(vertex_ii);
+    Z.col(vertex_ii).setZero();
+  };
+
+  auto update_matrix = [&vertex_ii, &cluster_kk](auto&& func) {
+
+    const SpMat& A = func.A;
+    Mat& C = func.C;
+    Mat& Z = func.Z;
+    Vec& N = func.N;
+
+    Z(cluster_kk, vertex_ii) = 1.0;
+    C += Z.col(vertex_ii) * A.row(vertex_ii);
+    N += Z.col(vertex_ii);
+  };
+
+  auto update_stat = [&](auto&& func) { func.update_z_stat(); };
+
+  func_apply(init_func, std::move(update_func_tup));
 
   Progress prog(opt.inner_iter(), !opt.verbose());
 
@@ -314,23 +356,17 @@ void hsblock_latent_inference(Update& update_func, RNG& rng,
     }
     prog.increment();
 
-    for (Index ii = 0; ii < Z.cols(); ++ii) {
-      const Vec& log_score = update_func.eval_tree_delta_score(root, ii);
-
-      C -= Z.col(ii) * A.row(ii);
-      N -= Z.col(ii);
-      Z.col(ii).setZero();
-
-      Index kk = randK(log_score, rng);
-      Z(kk, ii) = 1.0;
-
-      C += Z.col(ii) * A.row(ii);
-      N += Z.col(ii);
+    for (Index ii = 0; ii < numVertex; ++ii) {
+      logScore.setZero();
+      vertex_ii = ii;
+      func_apply(accum_eval, std::move(update_func_tup));
+      func_apply(discount_matrix, std::move(update_func_tup));
+      cluster_kk = randK(logScore, rng);
+      func_apply(update_matrix, std::move(update_func_tup));
     }
-    Zstat(Z);
+
+    func_apply(update_stat, std::move(update_func_tup));
   }
 }
-
-
 
 #endif
