@@ -210,13 +210,9 @@ inline void impl_update(DT& D, const Scalar rate, tag_bernoulli) {
 template <typename DT>
 inline void impl_eval_score(DT& D, tag_bernoulli) {
   static typename DT::Unit TOL = 1e-4;
-
-  // D.var_edge = D.stat_edge + D.a0 + TOL;
-  // D.var_hole = D.stat_total - D.stat_edge + D.b0 + TOL;
-
-  D.score = fasterlgamma(D.var_edge);
-  D.score += fasterlgamma(D.var_hole);
-  D.score -= fasterlgamma(D.var_edge + D.var_hole);
+  D.score = fasterlgamma(D.stat_edge + D.a0 + TOL);
+  D.score += fasterlgamma(D.stat_total - D.stat_edge + D.b0 + TOL);
+  D.score -= fasterlgamma(D.stat_total + D.a0 + D.b0 + 2.0 * TOL);
 }
 
 #endif

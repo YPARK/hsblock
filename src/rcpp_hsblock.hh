@@ -34,9 +34,11 @@ using Index = Mat::Index;
 template <typename TT>
 struct hsb_update_func_t;
 
-template <typename Update, typename RNG>
-void hsblock_latent_inference(Update& update_func, RNG& rng,
-                              const options_t& opt);
+template <typename RandDisc, typename Stat, typename RNG,
+          typename... UpdateFunc>
+inline void hsblock_latent_inference(
+    const Index numVertex, Stat& zstat, RandDisc& randK, RNG& rng,
+    const options_t& opt, std::tuple<UpdateFunc...>&& update_func_tup);
 
 #include "rcpp_hsblock_impl.hh"
 

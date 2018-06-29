@@ -45,7 +45,7 @@ struct inv_op_t {
   const T eps = 1e-8;
 };
 
-template<typename T>
+template <typename T>
 T log_sum(T log_a, T log_b) {
   T ret;
   const T one_val = static_cast<T>(1.0);

@@ -164,13 +164,20 @@ inline void impl_update(DT& D, const Scalar rate, tag_poisson) {
   D.var_tot += rate * (D.stat_total + D.b0);
 }
 
-// Gamma(A)
-// ---------
-// (B)^(A)
+////////////////////////////////////
+// b0^(a0)    Gam(a0 + Edge)      //
+// ------- ---------------------- //
+// Gam(a0) (b0 + Tot)^(a0 + Edge) //
+////////////////////////////////////
+
 template <typename DT>
 inline void impl_eval_score(DT& D, tag_poisson) {
-  D.score = fasterlgamma(D.var_edge);
-  D.score -= fasterlog(D.var_tot) * D.var_edge;
+  static typename DT::Unit TOL = 1e-4;
+
+  D.score = D.a0 * fasterlog(D.b0 + TOL);
+  D.score -= fasterlgamma(D.a0 + TOL);
+  D.score += fasterlgamma(D.a0 + D.stat_edge + TOL);
+  D.score -= (D.a0 + D.stat_edge) * fasterlog(D.b0 + D.stat_total + TOL);
 }
 
 #endif

@@ -2,24 +2,25 @@
 
 #include "rcpp_hsblock.hh"
 
-
-
-
-
 // [[Rcpp::export]]
-RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
+RcppExport SEXP rcpp_hsblock(const SpMat adj, SpMat latent_init,
+                             SEXP options_sexp) {
   BEGIN_RCPP
 
-  Rcpp::traits::input_parameter<const SpMat>::type adj(adj_sexp);
-  Rcpp::traits::input_parameter<Mat>::type latent_init(z_sexp);
+  // Rcpp::traits::input_parameter<const SpMat>::type adj(adj_sexp);
+  // Rcpp::traits::input_parameter<const Mat>::type latent_init(z_sexp);
+
   Rcpp::List options_list(options_sexp);
+  const Scalar TOL = 1e-4;
 
   options_t opt;
   set_options_from_list(options_list, opt);
 
   const Index depth = opt.tree_depth();
-  SpMat A = adj;
-  Mat Z = latent_init;
+
+  SpMat A(adj.rows(), adj.cols());
+  A = adj;
+  SpMat Z = latent_init;
 
   TLOG("depth = " << depth);
 
@@ -42,56 +43,64 @@ RcppExport SEXP rcpp_hsblock(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
 
   Vec llik(opt.vbiter());
 
-  //  using tree_data_t = hsb_bern_t<Scalar>;
-  using tree_data_t = hsb_pois_t<Scalar>;
+  using tree_data_t = hsb_bern_t<Scalar>;
+  // using tree_data_t = hsb_pois_t<Scalar>;
   using model_tree_t = btree_t<tree_data_t>;
   using update_t = hsb_update_func_t<model_tree_t>;
 
-  Mat C = Z * A;
-  Vec N = Z * Mat::Ones(Z.cols(), 1);
   model_tree_t tree(depth - 1);
   if (tree.num_leaves() != Z.rows()) {
     ELOG("Tree and latent matrix do match");
     return Rcpp::List::create();
   }
 
-  update_t update_func(tree, A, C, Z, N);
+  update_t update_func(tree, A, Z);
 
-  // 1. Initialize the tree model
+  // Initialize the tree model
   update_func.clear_tree_data();
   update_func.init_tree_var();
 
   const Index n = Z.cols();
 
   discrete_sampler_t<Vec> randK(Z.rows());
+  running_stat_t<SpMat> Zstat(Z.rows(), Z.cols());
 
-  hsblock_latent_inference(n, randK, rng, opt, std::make_tuple(update_func));
+  const Scalar rate0 = opt.rate0();
+  const Scalar decay = opt.decay();
+  const Scalar delay = opt.delay();
 
-  update_func.dump_tree_data();
+  for (Index iter = 0; iter < opt.vbiter(); ++iter) {
+    // Latent variable inference
+    Zstat.reset();
+    hsblock_latent_inference(n, Zstat, randK, rng, opt,
+                             std::make_tuple(update_func));
+    Z = Zstat.mean();
 
-  // // For each newtok, we pre-calculate cluster-specific degree matrix
-  // //
+    // Update tree
+    const Scalar rate = rate0 * std::pow(iter + delay, decay);
 
+    if (iter % opt.record_interval() == 0) {
+      try {
+        Rcpp::checkUserInterrupt();
+      } catch (Rcpp::internal::InterruptedException e) {
+        break;
+      }
+    }
 
+    Scalar score =
+        hsblock_param_inference(opt, rate, std::make_tuple(update_func));
 
-  // // // Compute log-likelihood
-  // // Scalar score = update_func.eval_tree_score(root);
-  // // llik(iter) = score;
-
-  // // if (opt.verbose()) {
-  // //   TLOG("Iter = " << iter << ", Score = " << score);
-  // // }
+    if (opt.verbose()) {
+      TLOG("Iter = " << iter << ", Score = " << score);
+    }
+  }
 
   // // This should happen out of latent variable inference
 
-  // update_func.clear_tree_data(root);
-  // for (Index ii = 0; ii < n; ++ii) {
-  //   update_func.increase_tree_stat(root, ii);
-  // }
-  // // update_func.update_tree_var(root, 0.01);
-  // // update_func.dump_tree_data(root);
+  //   ELOG(std::endl << update_func.Zstat.mean().transpose());
 
-  // Mat Zmean = update_func.Zstat.mean();
+  // ELOG("\n" << update_func.Zstat.Cum);
+  // ELOG("n = " << update_func.Zstat.n);
 
   return Rcpp::List::create(Rcpp::_["Z"] = Z, Rcpp::_["llik"] = llik);
   END_RCPP

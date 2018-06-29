@@ -18,7 +18,6 @@ struct discrete_sampler_t {
   template <typename Derived, typename RNG>
   Index operator()(const Eigen::MatrixBase<Derived>& log_prob, RNG& rng) {
     max_val = log_prob.maxCoeff();
-
     prob = log_prob.unaryExpr(safe_exp);
     prob /= prob.sum();
 
@@ -26,6 +25,48 @@ struct discrete_sampler_t {
     Scalar cum = 0.0;
     Index kk = 0;
     for (Index j = 0; j < prob.size(); ++j) {
+      cum += prob(j);
+      if (u <= cum) {
+        kk = j;
+        break;
+      }
+    }
+    return kk;
+  }
+
+  template <typename Derived, typename RNG>
+  Index operator()(const Eigen::MatrixBase<Derived>& log_prob, const Index n1,
+                   const Index n2, RNG& rng) {
+    // sample within [LB, UB)
+    Index LB, UB;
+
+    if (n1 < n2) {
+      LB = std::max(static_cast<Index>(0), n1);
+      UB = std::min(K, n2);
+    } else {
+      LB = std::max(static_cast<Index>(0), n2);
+      UB = std::min(K, n1);
+    }
+
+    max_val = log_prob(LB);
+
+    for (Index j = (LB + 1); j < UB; ++j) {
+      if (max_val < log_prob(j)) max_val = log_prob(j);
+    }
+
+    prob = log_prob.unaryExpr(safe_exp);
+
+    Scalar tot = 0.0;
+    for (Index j = LB; j < UB; ++j) {
+      tot += prob(j);
+    }
+    prob /= tot;
+
+    Scalar u = unif01(rng);
+    Scalar cum = 0.0;
+
+    Index kk = LB;
+    for (Index j = LB; j < UB; ++j) {
       cum += prob(j);
       if (u <= cum) {
         kk = j;

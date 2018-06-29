@@ -1,6 +1,9 @@
 #ifndef RCPP_HSBLOCK_IMPL_HH_
 #define RCPP_HSBLOCK_IMPL_HH_
 
+#include <algorithm>
+#include <vector>
+
 ////////////////////////////////////////////////////////////////
 // A collection of functors needed for inference in btree
 template <typename TT>
@@ -10,24 +13,17 @@ struct hsb_update_func_t {
   using Data = typename TT::node_data_t;
   using Scalar = typename Data::Unit;
 
-  explicit hsb_update_func_t(TT& tt, SpMat& adj, Mat& cc, Mat& zz, Vec& nn)
+  explicit hsb_update_func_t(TT& tt, SpMat& adj, SpMat& zz)
       : tree(tt),
+        n(zz.cols()),
+        K(zz.rows()),
         A(adj),
-        C(cc),
+        At(A.transpose()),
         Z(zz),
-        N(nn),
-        n(cc.cols()),
-        K(cc.rows()),
-        Zstat(cc.rows(), cc.cols()),
-        delta_score(zz.rows()) {
-#ifdef DEBUG
-    ASSERT(C.rows() == K && C.cols() == n,    // match dim
-           "C [" << K << " x " << n << "]");  //
-    ASSERT(Z.rows() == K && Z.cols() == n,    // match dim
-           "Z [" << K << " x " << n << "]");  //
-    ASSERT(N.rows() == K && N.cols() == 1,    // match dim
-           "N [" << K << " x " << 1 << "]");  //
-#endif
+        C(K, n),
+        ClustSize(K),
+        delta_score(K) {
+    calibrate_cnz();
   }
 
   // Initialize tree model with respect to Z
@@ -44,8 +40,8 @@ struct hsb_update_func_t {
   }
 
   void calibrate_cnz() {
-    C = Z * A;
-    N = Z * Mat::Ones(n, 1);
+    C = Z * At;
+    ClustSize = Z * Mat::Ones(n, 1);
   }
 
   void init_tree_var() { init_tree_var(tree.root_node_obj()); }
@@ -108,23 +104,22 @@ struct hsb_update_func_t {
   void dump_tree_data() { dump_tree_data(tree.root_node_obj()); }
 
   TT& tree;  // binary tree object
-  SpMat& A;  // n x n adjaency matrix
-  Mat& C;    // K x n cluster degree matrix
-  Mat& Z;    // K x n latent membership matrix
-  Vec& N;    // K x 1 size vector
-
   const Index n;
   const Index K;
-
-  running_stat_t<Mat> Zstat;
-
-  void reset_z_stat() { Zstat.reset(); }
-
-  void update_z_stat() { Zstat(Z); }
+  const SpMat& A;  // n x n adjaency matrix
+  const SpMat At;  // n x n adjaency transpose matrix
+  SpMat& Z;        // K x n latent membership matrix
+  SpMat C;         // K x n cluster degree matrix
+  Vec ClustSize;   // K x 1 size vector
 
   /////////////////////////////////////////////
   // Note: this doesn't work in delta-update //
   /////////////////////////////////////////////
+
+  void increase_tree_stat() {
+    for (Index ii = 0; ii < n; ++ii)
+      increase_tree_stat(tree.root_node_obj(), ii);
+  }
 
   void increase_tree_stat(Index ii) {
     increase_tree_stat(tree.root_node_obj(), ii);
@@ -224,9 +219,9 @@ struct hsb_update_func_t {
       const Index kk = r->leaf_idx();
 
       // statistics to push up
-      r->data.delta_stat_dik = C(kk, ii);
-      r->data.delta_stat_nik = Z(kk, ii);
-      r->data.delta_stat_nk = N(kk);
+      r->data.delta_stat_dik = C.coeff(kk, ii);
+      r->data.delta_stat_nik = Z.coeff(kk, ii);
+      r->data.delta_stat_nk = ClustSize(kk);
 
     } else {
       Node left = r->get_left();
@@ -300,10 +295,11 @@ struct hsb_update_func_t {
   }
 };
 
-template <typename RandDisc, typename RNG, typename... UpdateFunc>
-void hsblock_latent_inference(const Index numVertex, RandDisc& randK, RNG& rng,
-                              const options_t& opt,
-                              std::tuple<UpdateFunc...>&& update_func_tup) {
+template <typename RandDisc, typename Stat, typename RNG,
+          typename... UpdateFunc>
+inline void hsblock_latent_inference(
+    const Index numVertex, Stat& zstat, RandDisc& randK, RNG& rng,
+    const options_t& opt, std::tuple<UpdateFunc...>&& update_func_tup) {
   const Index K = randK.K;
 
   Index vertex_ii = 0;   // vertex index
@@ -311,10 +307,7 @@ void hsblock_latent_inference(const Index numVertex, RandDisc& randK, RNG& rng,
 
   Vec logScore(K);
 
-  auto init_func = [](auto&& func) {
-    func.calibrate_cnz();
-    func.reset_z_stat();
-  };
+  auto init_func = [](auto&& func) { func.calibrate_cnz(); };
 
   auto accum_eval = [&logScore, &vertex_ii](auto&& func) {
     logScore += func.eval_tree_delta_score(vertex_ii);
@@ -322,35 +315,76 @@ void hsblock_latent_inference(const Index numVertex, RandDisc& randK, RNG& rng,
 
   auto discount_matrix = [&vertex_ii](auto&& func) {
 
-    const SpMat& A = func.A;
-    Mat& C = func.C;
-    Mat& Z = func.Z;
-    Vec& N = func.N;
+    const SpMat& At = func.At;
+    SpMat& C = func.C;
+    SpMat& Z = func.Z;
+    Vec& ClustSize = func.ClustSize;
 
-    C -= Z.col(vertex_ii) * A.row(vertex_ii);
-    N -= Z.col(vertex_ii);
-    Z.col(vertex_ii).setZero();
+    // this: C -= Z.col(vertex_ii) * A.row(vertex_ii);
+    for (SpMat::InnerIterator jt(At, vertex_ii); jt; ++jt) {
+      const Index jj = jt.index();
+      const Scalar Aij = jt.value();
+      for (SpMat::InnerIterator kt(Z, vertex_ii); kt; ++kt) {
+        const Index kk = kt.index();
+        const Scalar Zki = kt.value();
+        C.coeffRef(kk, jj) -= Zki * Aij;
+      }
+    }
+    ClustSize -= Z.col(vertex_ii);
+    Z.col(vertex_ii) = Z.col(vertex_ii) * 0.0;
   };
 
   auto update_matrix = [&vertex_ii, &cluster_kk](auto&& func) {
 
-    const SpMat& A = func.A;
-    Mat& C = func.C;
-    Mat& Z = func.Z;
-    Vec& N = func.N;
+    const SpMat& At = func.At;
+    SpMat& C = func.C;
+    SpMat& Z = func.Z;
+    Vec& ClustSize = func.ClustSize;
 
-    Z(cluster_kk, vertex_ii) = 1.0;
-    C += Z.col(vertex_ii) * A.row(vertex_ii);
-    N += Z.col(vertex_ii);
+    Z.coeffRef(cluster_kk, vertex_ii) = 1.0;
+    // this: C += Z.col(vertex_ii) * A.row(vertex_ii);
+    for (SpMat::InnerIterator jt(At, vertex_ii); jt; ++jt) {
+      const Index jj = jt.index();
+      const Scalar Aij = jt.value();
+      C.coeffRef(cluster_kk, jj) += Aij;
+    }
+    ClustSize += Z.col(vertex_ii);
   };
 
-  auto update_stat = [&](auto&& func) { func.update_z_stat(); };
+  auto prune_matrix = [](auto&& func) {
+    const Scalar ZERO = 0.0;
+    const Scalar TOL = 1e-4;
+    func.C.prune(ZERO, TOL);
+    func.Z.prune(ZERO, TOL);
+  };
+
+  /////////////////////////////////////////////////////////////////////
+  // This could save some time if the graphs are totally assortative //
+  /////////////////////////////////////////////////////////////////////
+
+  Index kMin, kMax;
+
+  auto narrow_clusters = [&kMin, &kMax, &vertex_ii](auto&& func) {
+    for (SpMat::InnerIterator kt(func.C, vertex_ii); kt; ++kt) {
+      if (kMin > kt.index()) kMin = kt.index();
+      if (kMax < kt.index()) kMax = kt.index();
+    }
+  };
+
+  auto accum_eval_econ = [&logScore, &vertex_ii, &kMin, &kMax](auto&& func) {
+    auto lca = func.tree.get_lca_node_obj(kMin, kMax);
+    logScore += func.eval_tree_delta_score(lca, vertex_ii);
+  };
+
+  auto update_stat = [](auto&& func) { func.update_z_stat(); };
 
   func_apply(init_func, std::move(update_func_tup));
 
-  Progress prog(opt.inner_iter(), !opt.verbose());
+  Progress prog(opt.inner_iter() + opt.burnin_iter(), false);
 
-  for (Index inner_iter = 0; inner_iter < opt.inner_iter(); ++inner_iter) {
+  const Index max_iter = opt.inner_iter() + opt.burnin_iter();
+
+  for (Index inner_iter = 0; inner_iter < max_iter; ++inner_iter) {
     if (Progress::check_abort()) {
       break;
     }
@@ -359,14 +393,52 @@ void hsblock_latent_inference(const Index numVertex, RandDisc& randK, RNG& rng,
     for (Index ii = 0; ii < numVertex; ++ii) {
       logScore.setZero();
       vertex_ii = ii;
-      func_apply(accum_eval, std::move(update_func_tup));
-      func_apply(discount_matrix, std::move(update_func_tup));
-      cluster_kk = randK(logScore, rng);
-      func_apply(update_matrix, std::move(update_func_tup));
+
+      if (opt.economy()) {
+        kMin = K;
+        kMax = -1;
+        func_apply(narrow_clusters, std::move(update_func_tup));
+        if (kMax >= 0 && kMin != kMax) {
+          func_apply(accum_eval_econ, std::move(update_func_tup));
+          func_apply(discount_matrix, std::move(update_func_tup));
+          cluster_kk = randK(logScore, kMin, kMax + 1, rng);
+          func_apply(update_matrix, std::move(update_func_tup));
+        }
+      } else {
+        func_apply(accum_eval, std::move(update_func_tup));
+        func_apply(discount_matrix, std::move(update_func_tup));
+        cluster_kk = randK(logScore, rng);
+        func_apply(update_matrix, std::move(update_func_tup));
+      }
     }
 
-    func_apply(update_stat, std::move(update_func_tup));
+    if (inner_iter > opt.burnin_iter() &&
+        ((inner_iter % opt.record_interval()) == 0)) {
+      func_apply(prune_matrix, std::move(update_func_tup));
+      auto& func = std::get<0>(update_func_tup);  // Z is shared
+      zstat.add(func.Z);
+    }
   }
+}
+
+template <typename... UpdateFunc, typename Scalar>
+inline Scalar hsblock_param_inference(
+    const options_t& opt, const Scalar rate,
+    std::tuple<UpdateFunc...>&& update_func_tup) {
+  Scalar score = 0.0;
+
+  auto clear_increase_update = [&rate](auto&& func) {
+    func.clear_tree_data();
+    func.increase_tree_stat();
+    func.update_tree_var(rate);
+  };
+
+  auto eval_tree = [&score](auto&& func) { score += func.eval_tree_score(); };
+
+  func_apply(clear_increase_update, std::move(update_func_tup));
+  func_apply(eval_tree, std::move(update_func_tup));
+
+  return score;
 }
 
 #endif

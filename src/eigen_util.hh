@@ -371,30 +371,35 @@ struct running_stat_t {
   }
 
   template <typename Derived>
-  void operator()(const Eigen::MatrixBase<Derived>& X) {
+  void add(const Eigen::MatrixBase<Derived>& X) {
     Cum += X;
     SqCum += X.cwiseProduct(X);
     ++n;
   }
 
   template <typename Derived>
-  void operator()(const Eigen::SparseMatrixBase<Derived>& X) {
+  void add(const Eigen::SparseMatrixBase<Derived>& X) {
     Cum += X;
     SqCum += X.cwiseProduct(X);
     ++n;
   }
 
-  const T& mean() {
+  T mean() {
     if (n > 0) {
       Mean = Cum / n;
+    } else {
+      setConstant(Mean, 0.0);
     }
     return Mean;
   }
 
-  const T& var() {
+  T var() {
     if (n > 0) {
       Mean = Cum / n;
       Var = SqCum / n - Mean.cwiseProduct(Mean);
+    } else {
+      setConstant(Mean, 0.0);
+      setConstant(Var, 0.0);
     }
     return Var;
   }

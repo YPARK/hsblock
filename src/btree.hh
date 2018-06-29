@@ -461,6 +461,12 @@ typename btree_t<D>::node_ptr_t btree_t<D>::pa_node_obj(node_ptr_t node) {
 template <typename D>
 typename btree_t<D>::node_ptr_t btree_t<D>::get_lca_node_obj(int leaf_x,
                                                              int leaf_y) {
+#ifdef DEBUG
+  assert(leaf_x >= 0);
+  assert(leaf_y >= 0);
+  assert(leaf_x < num_leaves());
+  assert(leaf_x < num_leaves());
+#endif
   // int lca = get_lca( leaf_internal_idx(leaf_x), leaf_internal_idx(leaf_y) );
   // tree_message( "has lca: " << lca << " of x=" << leaf_internal_idx(leaf_x)
   // << " y=" << leaf_internal_idx(leaf_y) );
