@@ -314,7 +314,6 @@ inline void hsblock_latent_inference(
   };
 
   auto discount_matrix = [&vertex_ii](auto&& func) {
-
     const SpMat& At = func.At;
     SpMat& C = func.C;
     SpMat& Z = func.Z;
@@ -334,8 +333,8 @@ inline void hsblock_latent_inference(
     Z.col(vertex_ii) = Z.col(vertex_ii) * 0.0;
   };
 
-  auto update_matrix = [&vertex_ii, &cluster_kk](auto&& func) {
-
+  // update matrix by stochastic sampling of z(k,i)
+  auto update_matrix_stoch = [&vertex_ii, &cluster_kk](auto&& func) {
     const SpMat& At = func.At;
     SpMat& C = func.C;
     SpMat& Z = func.Z;
@@ -347,6 +346,34 @@ inline void hsblock_latent_inference(
       const Index jj = jt.index();
       const Scalar Aij = jt.value();
       C.coeffRef(cluster_kk, jj) += Aij;
+    }
+    ClustSize += Z.col(vertex_ii);
+  };
+
+  // update matrix normalizing z
+  auto update_matrix_norm = [&vertex_ii, &randK, &logScore](auto&& func) {
+    const SpMat& At = func.At;
+    SpMat& C = func.C;
+    SpMat& Z = func.Z;
+    Vec& ClustSize = func.ClustSize;
+
+    const Scalar ZERO = 0.0;
+    const Scalar TOL = 1e-4;
+
+    Z.col(vertex_ii) +=
+        randK.take_prob(logScore).sparseView().pruned(ZERO, TOL);
+    Z.col(vertex_ii) = Z.col(vertex_ii) / Z.col(vertex_ii).sum();
+
+    // this: C += Z.col(vertex_ii) * A.row(vertex_ii);
+    for (SpMat::InnerIterator jt(At, vertex_ii); jt; ++jt) {
+      const Index jj = jt.index();
+      const Scalar Aij = jt.value();
+
+      for (SpMat::InnerIterator kt(Z, vertex_ii); kt; ++kt) {
+        const Index kk = kt.index();
+        const Scalar Zki = kt.value();
+        C.coeffRef(kk, jj) += Zki * Aij;
+      }
     }
     ClustSize += Z.col(vertex_ii);
   };
@@ -401,14 +428,24 @@ inline void hsblock_latent_inference(
         if (kMax >= 0 && kMin != kMax) {
           func_apply(accum_eval_econ, std::move(update_func_tup));
           func_apply(discount_matrix, std::move(update_func_tup));
-          cluster_kk = randK(logScore, kMin, kMax + 1, rng);
-          func_apply(update_matrix, std::move(update_func_tup));
+
+          if (inner_iter < opt.burnin_iter()) {
+            cluster_kk = randK(logScore, kMin, kMax + 1, rng);
+            func_apply(update_matrix_stoch, std::move(update_func_tup));
+          } else {
+            func_apply(update_matrix_norm, std::move(update_func_tup));
+          }
         }
       } else {
         func_apply(accum_eval, std::move(update_func_tup));
         func_apply(discount_matrix, std::move(update_func_tup));
-        cluster_kk = randK(logScore, rng);
-        func_apply(update_matrix, std::move(update_func_tup));
+
+        if (inner_iter < opt.burnin_iter()) {
+          cluster_kk = randK(logScore, rng);
+          func_apply(update_matrix_stoch, std::move(update_func_tup));
+        } else {
+          func_apply(update_matrix_norm, std::move(update_func_tup));
+        }
       }
     }
 

@@ -34,6 +34,14 @@ struct discrete_sampler_t {
     return kk;
   }
 
+  template <typename Derived>
+  const T& take_prob(const Eigen::MatrixBase<Derived>& log_prob) {
+    max_val = log_prob.maxCoeff();
+    prob = log_prob.unaryExpr(safe_exp);
+    prob /= prob.sum();
+    return prob;
+  }
+
   template <typename Derived, typename RNG>
   Index operator()(const Eigen::MatrixBase<Derived>& log_prob, const Index n1,
                    const Index n2, RNG& rng) {

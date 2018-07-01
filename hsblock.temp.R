@@ -33,12 +33,13 @@ Z <- sparseMatrix(i = sample(K, n, replace = TRUE), j = 1:n, x = rep(1, n),
                   dims = c(K, n))
 
 opt <- list(tree.depth = depth,
-            vbiter = 1000,
-            record.interval = 1,
-            inner.iter = 10,
-            rate0 = 0.1,
-            decay = -.75,
-            delay = 5.,
+            vbiter = 100,
+            record.interval = 2,
+            inner.iter = 20,
+            burnin.iter = 10,
+            rate0 = 1e-2,
+            decay = -.51,
+            delay = 10.,
             economy = FALSE)
 
 Sys.setenv("PKG_CXXFLAGS"="-std=c++14 -Wno-unknown-pragmas")
