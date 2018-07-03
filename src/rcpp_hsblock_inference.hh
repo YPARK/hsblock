@@ -4,8 +4,8 @@
 #include "hsb_func_dummy.hh"
 #include "hsb_update_data.hh"
 
-#ifndef RCPP_HSBLOCK_IMPL_HH_
-#define RCPP_HSBLOCK_IMPL_HH_
+#ifndef RCPP_HSBLOCK_INFERENCE_HH_
+#define RCPP_HSBLOCK_INFERENCE_HH_
 
 template <typename RandDisc, typename Stat, typename RNG, typename... ModelData,
           typename... NullData>

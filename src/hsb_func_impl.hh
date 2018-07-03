@@ -381,8 +381,8 @@ inline void recursive_tree_stat(Udata& udata, Node r, const Index ii, Op op,
     Node left = r->get_left();
     Node right = r->get_right();
 
-    recursive_tree_stat(udata, left, ii, op);
-    recursive_tree_stat(udata, right, ii, op);
+    recursive_tree_stat(udata, left, ii, op, NON_DEGREE_CORRECTED());
+    recursive_tree_stat(udata, right, ii, op, NON_DEGREE_CORRECTED());
     merge_left_right_delta(left->data, right->data, r->data);
 
     const Scalar niL = left->data.delta_stat_nik;

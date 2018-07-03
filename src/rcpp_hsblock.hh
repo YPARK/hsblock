@@ -19,7 +19,6 @@
 
 #include "eigen_sampler.hh"
 #include "eigen_util.hh"
-#include "hsb_data.hh"
 #include "mathutil.hh"
 
 #ifndef RCPP_HSBLOCK_HH_
@@ -31,16 +30,10 @@ using SpMat = Eigen::SparseMatrix<float, Eigen::ColMajor>;
 using Scalar = Mat::Scalar;
 using Index = Mat::Index;
 
-template <typename TT>
-struct hsb_update_func_t;
-
+#include "hsb_data.hh"
 #include "hsb_func.hh"
 #include "hsb_func_dummy.hh"
 #include "rcpp_hsblock_inference.hh"
-
-// Basic stochastic block model estimation
-
-
-
+#include "rcpp_hsblock_impl.hh"
 
 #endif
