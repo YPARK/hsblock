@@ -81,4 +81,23 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
   return Rcpp::List::create(Rcpp::_["Z"] = Z, Rcpp::_["llik"] = llik);
 }
 
+// template<typename Derived>
+bool valid_bern_data(const SpMat adj) {
+  calc_stat_t<Scalar> calc_stat;
+  visit(adj, calc_stat);
+  const Scalar max_val = calc_stat.max();
+  const Scalar min_val = calc_stat.min();
+  if (max_val > 1.0) return false;
+  if (min_val < 0.0) return false;
+  return true;
+}
+
+bool valid_pois_data(const SpMat adj) {
+  calc_stat_t<Scalar> calc_stat;
+  visit(adj, calc_stat);
+  const Scalar min_val = calc_stat.min();
+  if (min_val < 0.0) return false;
+  return true;
+}
+
 #endif

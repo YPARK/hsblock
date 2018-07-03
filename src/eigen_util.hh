@@ -213,19 +213,22 @@ void initialize(const Eigen::SparseMatrixBase<Derived>& adj,
 
 ////////////////////////////////////////////////////////////////
 template <typename Derived, typename Visitor>
-void visit(Eigen::SparseMatrixBase<Derived>& M, Visitor& visitor) {
+void visit(const Eigen::SparseMatrixBase<Derived>& _M, Visitor& visitor) {
+
   using Scalar = typename Derived::Scalar;
   using Index = typename Derived::Index;
+  using IIT = typename Derived::InnerIterator;
+  const Derived M = _M.derived();
 
-  bool is_first = true;
+  bool is_first_visit = true;
   for (Index k = 0; k < M.outerSize(); ++k) {
-    for (typename Derived::InnerIterator it(M, k); it; ++it) {
+    for (IIT it{M, k}; it; ++it) {
       const Scalar val = it.value();
       const Index i = it.row();
       const Index j = it.col();
-      if (is_first) {
+      if (is_first_visit) {
         visitor.init(val, i, j);
-        is_first = false;
+        is_first_visit = false;
       } else {
         visitor(val, i, j);
       }

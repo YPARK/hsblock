@@ -15,6 +15,10 @@ RcppExport SEXP vem_hsb_bern(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   using TD = hsb_bern_t<Scalar>;
   using Tree = btree_t<TD>;
   using UD = hsb_update_data_t<Tree, NON_DEGREE_CORRECTED>;
+  if(!valid_bern_data(adj)) {
+    ELOG("Invalid adjacency matrix");
+    return Rcpp::List::create();
+  }
 
   auto ret = var_em<Tree, UD>(adj, latent_init, opt);
   return Rcpp::wrap(ret);
@@ -35,6 +39,11 @@ RcppExport SEXP vem_hsb_pois(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   using Tree = btree_t<TD>;
   using UD = hsb_update_data_t<Tree, NON_DEGREE_CORRECTED>;
 
+  if(!valid_pois_data(adj)) {
+    ELOG("Invalid adjacency matrix");
+    return Rcpp::List::create();
+  }
+
   auto ret = var_em<Tree, UD>(adj, latent_init, opt);
   return Rcpp::wrap(ret);
   END_RCPP
@@ -53,6 +62,11 @@ RcppExport SEXP vem_dhsb_pois(SEXP adj_sexp, SEXP z_sexp, SEXP options_sexp) {
   using TD = hsb_pois_t<Scalar>;
   using Tree = btree_t<TD>;
   using UD = hsb_update_data_t<Tree, DEGREE_CORRECTED>;
+
+  if(!valid_pois_data(adj)) {
+    ELOG("Invalid adjacency matrix");
+    return Rcpp::List::create();
+  }
 
   auto ret = var_em<Tree, UD>(adj, latent_init, opt);
   return Rcpp::wrap(ret);

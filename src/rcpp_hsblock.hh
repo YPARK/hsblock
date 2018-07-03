@@ -34,6 +34,14 @@ using Index = Mat::Index;
 #include "hsb_func.hh"
 #include "hsb_func_dummy.hh"
 #include "rcpp_hsblock_inference.hh"
+
+template <typename Tree, typename UpdateData>
+Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
+                  const options_t& opt);
+
+// bool valid_bern_data(const SpMat adj);
+// bool valid_pois_data(const SpMat adj);
+
 #include "rcpp_hsblock_impl.hh"
 
 #endif
