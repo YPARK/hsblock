@@ -87,6 +87,17 @@ inline void impl_init_param_intern(DT& data, DT& data_left, DT& data_right,
 }
 
 template <typename DT>
+inline void impl_init_param_null(DT& data, tag_poisson) {
+  using Unit = typename DT::Unit;
+  const Unit one_val = 1.0;
+
+  data.a0 = one_val;
+  data.b0 = one_val + one_val;
+  data.var_edge = data.stat_edge;
+  data.var_tot = data.stat_total;
+}
+
+template <typename DT>
 void impl_dump(DT& data, tag_poisson) {
   Rcpp::Rcerr << "E: " << data.stat_edge;
   Rcpp::Rcerr << " T: " << data.stat_total;
@@ -172,6 +183,16 @@ inline void impl_update(DT& D, const Scalar rate, tag_poisson) {
 
 template <typename DT>
 inline void impl_eval_score(DT& D, tag_poisson) {
+  static typename DT::Unit TOL = 1e-4;
+
+  D.score = D.a0 * fasterlog(D.b0 + TOL);
+  D.score -= fasterlgamma(D.a0 + TOL);
+  D.score += fasterlgamma(D.a0 + D.var_edge + TOL);
+  D.score -= (D.a0 + D.var_edge) * fasterlog(D.b0 + D.var_tot + TOL);
+}
+
+template <typename DT>
+inline void impl_eval_stat_score(DT& D, tag_poisson) {
   static typename DT::Unit TOL = 1e-4;
 
   D.score = D.a0 * fasterlog(D.b0 + TOL);

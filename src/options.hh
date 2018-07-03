@@ -10,7 +10,6 @@ struct options_t {
     K = 1;
     TREE_DEPTH = 2;
     VERBOSE = true;
-    ECONOMY = false;
     RSEED = 19937;
     DECAY = -0.55;
     RATE0 = 0.01;
@@ -24,7 +23,6 @@ struct options_t {
   const int k() const { return K; };
   const int rseed() const { return RSEED; };
   const bool verbose() const { return VERBOSE; }
-  const bool economy() const { return ECONOMY; }
   const float decay() const { return DECAY; }
   const float delay() const { return DELAY; }
   const float rate0() const { return RATE0; }
@@ -38,8 +36,6 @@ struct options_t {
   int RSEED;
 
   bool VERBOSE;
-  bool ECONOMY;
-
   float DECAY;
   float DELAY;
   float RATE0;

@@ -3,8 +3,15 @@
 #ifndef DUMMY_EFFECT_HH_
 #define DUMMY_EFFECT_HH_
 
+struct dummy_vec_t {};
+
 struct dummy_mat_t {
   operator SEXP() const { return Rcpp::NumericVector(); }
+  template <typename T>
+  const dummy_vec_t &col(T) {
+    return dummy_vec;
+  }
+  dummy_vec_t dummy_vec;
 };
 
 struct dummy_eta_t {
@@ -55,6 +62,131 @@ inline const Eigen::SparseMatrixBase<Derived> &operator+(
   return rhs;
 }
 
+////////////////////////////////////////////////////////////////
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_mat_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-=(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_mat_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-(
+    const dummy_mat_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-=(
+    const dummy_mat_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator-(
+    const Eigen::SparseMatrixBase<Derived> &lhs, const dummy_mat_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator-(
+    const dummy_mat_t &, const Eigen::SparseMatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+////////////////////////////////////////////////////////////////
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator+(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator+=(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+inline const dummy_mat_t &operator+=(const dummy_mat_t &lhs,
+                                     const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator+(
+    const dummy_vec_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator+=(
+    const dummy_vec_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator+(
+    const Eigen::SparseMatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator+(
+    const dummy_vec_t &, const Eigen::SparseMatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+////////////////////////////////////////////////////////////////
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-=(
+    const Eigen::MatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+inline const dummy_mat_t &operator-=(const dummy_mat_t &lhs,
+                                     const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-(
+    const dummy_vec_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::MatrixBase<Derived> &operator-=(
+    const dummy_vec_t &, const Eigen::MatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator-(
+    const Eigen::SparseMatrixBase<Derived> &lhs, const dummy_vec_t &) {
+  return lhs;
+}
+
+template <typename Derived>
+inline const Eigen::SparseMatrixBase<Derived> &operator-(
+    const dummy_vec_t &, const Eigen::SparseMatrixBase<Derived> &rhs) {
+  return rhs;
+}
+
+////////////////////////////////////////////////////////////////
 template <typename T>
 struct is_dummy_eta_type {
   static constexpr bool value = false;

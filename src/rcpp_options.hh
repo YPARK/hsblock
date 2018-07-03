@@ -28,12 +28,6 @@ void set_options_from_list(Rcpp::List& _list, options_t& opt) {
   if (_list.containsElementNamed("verbose"))
     opt.VERBOSE = Rcpp::as<bool>(_list["verbose"]);
 
-  if (_list.containsElementNamed("economy"))
-    opt.ECONOMY = Rcpp::as<bool>(_list["economy"]);
-
-  if (_list.containsElementNamed("econ"))
-    opt.ECONOMY = Rcpp::as<bool>(_list["econ"]);
-
   if (_list.containsElementNamed("rate"))
     opt.RATE0 = Rcpp::as<float>(_list["rate"]);
 

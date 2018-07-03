@@ -35,6 +35,11 @@ void init_param(DT& dt, const Scalar level) {
 }
 
 template <typename DT>
+void init_param_null(DT& dt) {
+  impl_init_param_null(dt, distrib_tag<DT>());
+}
+
+template <typename DT>
 void dump(DT& dt) {
   impl_dump(dt, distrib_tag<DT>());
 }
@@ -75,6 +80,11 @@ void merge_left_right_delta(const DT& left, const DT& right, DT& intern) {
 template <typename DT>
 void eval_score(DT& dt) {
   impl_eval_score(dt, distrib_tag<DT>());
+}
+
+template <typename DT>
+void eval_stat_score(DT& dt) {
+  impl_eval_stat_score(dt, distrib_tag<DT>());
 }
 
 #endif

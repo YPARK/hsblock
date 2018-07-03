@@ -34,12 +34,13 @@ using Index = Mat::Index;
 template <typename TT>
 struct hsb_update_func_t;
 
-template <typename RandDisc, typename Stat, typename RNG,
-          typename... UpdateFunc>
-inline void hsblock_latent_inference(
-    const Index numVertex, Stat& zstat, RandDisc& randK, RNG& rng,
-    const options_t& opt, std::tuple<UpdateFunc...>&& update_func_tup);
+#include "hsb_func.hh"
+#include "hsb_func_dummy.hh"
+#include "rcpp_hsblock_inference.hh"
 
-#include "rcpp_hsblock_impl.hh"
+// Basic stochastic block model estimation
+
+
+
 
 #endif

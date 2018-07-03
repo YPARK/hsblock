@@ -44,13 +44,13 @@ template <typename DT, typename Scalar>
 inline void impl_init_param(DT& data, const Scalar level, tag_bernoulli) {
   using Unit = typename DT::Unit;
 
-  const Unit diminishing = 2.0;
+  const Unit diminishing = 4.0;
   const Unit min_nk = 3.0;
   const Unit TOL = 1e-4;
   const Unit one_val = 1.0;
 
-  data.a0 = one_val;
-  data.b0 = one_val;
+  data.a0 = TOL;
+  data.b0 = TOL;
 
   const Unit pr = std::pow(diminishing, -level);
 
@@ -66,12 +66,12 @@ inline void impl_init_param_intern(DT& data, DT& data_left, DT& data_right,
                                    const Scalar level, tag_bernoulli) {
   using Unit = typename DT::Unit;
 
-  const Unit diminishing = 2.0;
+  const Unit diminishing = 4.0;
   const Unit TOL = 1e-4;
   const Unit one_val = 1.0;
 
-  data.a0 = one_val;
-  data.b0 = one_val;
+  data.a0 = TOL;
+  data.b0 = TOL;
 
   const Unit pr = std::pow(diminishing, -level);
 
@@ -84,17 +84,34 @@ inline void impl_init_param_intern(DT& data, DT& data_left, DT& data_right,
 }
 
 template <typename DT>
+inline void impl_init_param_null(DT& data, tag_bernoulli) {
+  using Unit = typename DT::Unit;
+  const Unit TOL = 1e-4;
+
+  data.a0 = TOL;
+  data.b0 = TOL;
+  data.var_edge = data.stat_edge;
+  data.var_hole = data.stat_total - data.stat_edge;
+}
+
+template <typename DT>
 void impl_dump(DT& data, tag_bernoulli) {
-  Rcpp::Rcerr << "E: " << data.stat_edge;
-  Rcpp::Rcerr << " T: " << data.stat_total;
-  Rcpp::Rcerr << " E[theta]: "
-              << (data.var_edge / (data.var_edge + data.var_hole));
-  Rcpp::Rcerr << " d_ik: " << data.delta_stat_dik;
-  Rcpp::Rcerr << " n_ik: " << data.delta_stat_nik;
-  Rcpp::Rcerr << " n_k: " << data.delta_stat_nk;
-  Rcpp::Rcerr << " dS: " << data.delta_score;
-  Rcpp::Rcerr << " dSL: " << data.delta_score_left;
-  Rcpp::Rcerr << " dSR: " << data.delta_score_right;
+  Rcpp::Rcerr << "E: " << std::setprecision(4) << std::setw(10)
+              << data.stat_edge;
+  Rcpp::Rcerr << ", T: " << std::setw(10) << data.stat_total;
+  Rcpp::Rcerr << ", Ev: " << std::setw(10) << data.var_edge;
+  Rcpp::Rcerr << ", Hv: " << std::setw(10) << data.var_hole;
+  Rcpp::Rcerr << ", d_ik: " << std::setw(10) << data.delta_stat_dik;
+  Rcpp::Rcerr << ", n_ik: " << std::setw(10) << data.delta_stat_nik;
+  Rcpp::Rcerr << ", n_k: " << std::setw(10) << data.delta_stat_nk;
+  Rcpp::Rcerr << ", Score: " << std::setw(10) << data.score;
+
+  // Rcpp::Rcerr << ", Pr: " << std::setw(10)
+  //             << (data.var_edge / (data.var_edge + data.var_hole));
+
+  // Rcpp::Rcerr << ", dS: " << std::setw(10) << data.delta_score;
+  // Rcpp::Rcerr << ", dSL: " << std::setw(10) << data.delta_score_left;
+  // Rcpp::Rcerr << ", dSR: " << std::setw(10) << data.delta_score_right;
   Rcpp::Rcerr << std::endl;
 }
 
@@ -195,11 +212,10 @@ inline void impl_eval_delta_right(DT& D, const DT& left, tag_bernoulli) {
 
 template <typename DT, typename Scalar>
 inline void impl_update(DT& D, const Scalar rate, tag_bernoulli) {
-  static typename DT::Unit TOL = 1e-4;
   D.var_edge = D.var_edge * (1.0 - rate);
-  D.var_edge += rate * (D.stat_edge + D.a0 + TOL);
+  D.var_edge += rate * (D.stat_edge + D.a0);
   D.var_hole = D.var_hole * (1.0 - rate);
-  D.var_hole += rate * (D.stat_total - D.stat_edge + D.b0 + TOL);
+  D.var_hole += rate * (D.stat_total - D.stat_edge + D.b0);
 }
 
 ///////////////////
@@ -210,9 +226,24 @@ inline void impl_update(DT& D, const Scalar rate, tag_bernoulli) {
 template <typename DT>
 inline void impl_eval_score(DT& D, tag_bernoulli) {
   static typename DT::Unit TOL = 1e-4;
+  D.score = fasterlgamma(D.var_edge + TOL);
+  D.score += fasterlgamma(D.var_hole + TOL);
+  D.score -= fasterlgamma(D.var_edge + D.var_hole + 2.0 * TOL);
+  D.score -= fasterlgamma(D.a0 + TOL);
+  D.score -= fasterlgamma(D.b0 + TOL);
+  D.score += fasterlgamma(D.a0 + D.b0 + 2.0 * TOL);
+}
+
+template <typename DT>
+inline void impl_eval_stat_score(DT& D, tag_bernoulli) {
+  static typename DT::Unit TOL = 1e-4;
   D.score = fasterlgamma(D.stat_edge + D.a0 + TOL);
   D.score += fasterlgamma(D.stat_total - D.stat_edge + D.b0 + TOL);
   D.score -= fasterlgamma(D.stat_total + D.a0 + D.b0 + 2.0 * TOL);
+
+  D.score -= fasterlgamma(D.a0 + TOL);
+  D.score -= fasterlgamma(D.b0 + TOL);
+  D.score += fasterlgamma(D.a0 + D.b0 + 2.0 * TOL);
 }
 
 #endif
