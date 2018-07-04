@@ -3,8 +3,8 @@
 
 struct options_t {
   explicit options_t() {
-    VBITER = 2000;
-    INNER_ITER = 1000;
+    VBITER = 1000;
+    INNER_ITER = 100;
     BURNIN_ITER = 100;
     RECORD_INTERV = 10;
     K = 1;
@@ -12,6 +12,7 @@ struct options_t {
     VERBOSE = true;
     RSEED = 19937;
     DECAY = -0.55;
+    DELAY = 1.0;
     RATE0 = 0.01;
   }
 

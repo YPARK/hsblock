@@ -39,8 +39,8 @@ template <typename Tree, typename UpdateData>
 Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
                   const options_t& opt);
 
-// bool valid_bern_data(const SpMat adj);
-// bool valid_pois_data(const SpMat adj);
+bool valid_bern_data(const SpMat adj);
+bool valid_pois_data(const SpMat adj);
 
 #include "rcpp_hsblock_impl.hh"
 

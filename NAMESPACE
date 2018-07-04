@@ -1,4 +1,5 @@
 useDynLib(hsblock)
+import(Matrix)
 import(RcppEigen)
 import(RcppProgress)
 importFrom(Rcpp, evalCpp)

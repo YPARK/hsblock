@@ -30,6 +30,25 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
     return Rcpp::List::create();
   }
 
+  const Scalar rate0 = opt.rate0();
+  const Scalar decay = opt.decay();
+  const Scalar delay = opt.delay();
+
+  if (rate0 <= 0 || rate0 > 1) {
+    ELOG("rate0 (0, 1] parameter is wrong: " << rate0);
+    return Rcpp::List::create();
+  }
+
+  if (decay >= 0) {
+    ELOG("decay parameter must be negative: " << decay);
+    return Rcpp::List::create();
+  }
+
+  if (delay < 1) {
+    ELOG("delay parameter must be at least 1: " << delay);
+    return Rcpp::List::create();
+  }
+
   std::mt19937 rng(opt.rseed());
   Vec llik(opt.vbiter());
 
@@ -50,16 +69,15 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
   discrete_sampler_t<Vec> randK(Z.rows());
   running_stat_t<SpMat> Zstat(Z.rows(), Z.cols());
 
-  const Scalar rate0 = opt.rate0();
-  const Scalar decay = opt.decay();
-  const Scalar delay = opt.delay();
   Progress prog(opt.vbiter(), !opt.verbose());
 
   for (Index iter = 0; iter < opt.vbiter(); ++iter) {
     Zstat.reset();
+
     hsblock_latent_inference(n, Zstat, randK, rng, opt,
                              std::make_tuple(update_data),
                              std::make_tuple(empty));
+
     Z = Zstat.mean().pruned(ZERO, TOL);
 
     if (Progress::check_abort()) {
@@ -68,6 +86,7 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
     prog.increment();
 
     const Scalar rate = rate0 * std::pow(iter + delay, decay);
+
     const Scalar score = hsblock_param_inference(
         opt, rate, std::make_tuple(update_data), std::make_tuple(empty));
 

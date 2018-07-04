@@ -90,7 +90,7 @@ inline Scalar hsblock_param_inference(const options_t& opt, const Scalar rate,
   auto clear_increase_update = [&rate](auto&& data) {
     clear_tree_data(data);
     data.calibrate();
-    increase_tree_stat(data);
+    increase_tree_stat(data);    
     update_tree_var(data, rate);
   };
 

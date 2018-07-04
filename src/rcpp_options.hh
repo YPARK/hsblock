@@ -36,8 +36,6 @@ void set_options_from_list(Rcpp::List& _list, options_t& opt) {
 
   if (_list.containsElementNamed("delay"))
     opt.DELAY = Rcpp::as<float>(_list["delay"]);
-
-  if (_list.containsElementNamed("k")) opt.K = Rcpp::as<int>(_list["k"]);
 }
 
 #endif
