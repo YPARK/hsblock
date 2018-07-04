@@ -11,3 +11,5 @@ $(PKG)_$(VER).tar.gz: $(SRC) $(HDR) $(RR) $(MAN)
 	R -e "roxygen2::roxygenise();"
 	R CMD build .
 
+check: $(PKG)_$(VER).tar.gz
+	R CMD check $<

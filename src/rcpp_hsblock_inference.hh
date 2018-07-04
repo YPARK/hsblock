@@ -81,8 +81,55 @@ inline void hsblock_latent_inference(const Index numVertex, Stat& zstat,
   }
 }
 
+template <typename... ModelData>
+inline Scalar hsblock_empirical_score(
+    std::tuple<ModelData...>&& model_data_tup) {
+  Scalar score = 0.0;
+
+  auto clear_update = [](auto&& data) {
+    clear_tree_data(data);
+    data.calibrate();
+  };
+
+  auto increase_update = [](auto&& data) { increase_tree_stat(data); };
+
+  auto eval_tree_add = [&score](auto&& data) {
+    score += eval_tree_stat_score(data);
+  };
+
+  func_apply(clear_update, std::move(model_data_tup));
+  func_apply(increase_update, std::move(model_data_tup));
+  func_apply(eval_tree_add, std::move(model_data_tup));
+  func_apply(clear_update, std::move(model_data_tup));
+
+  return score;
+}
+
+template <typename... ModelData>
+inline Scalar hsblock_var_score(std::tuple<ModelData...>&& model_data_tup) {
+  Scalar score = 0.0;
+
+  auto clear_update = [](auto&& data) {
+    clear_tree_data(data);
+    data.calibrate();
+  };
+
+  auto increase_update = [](auto&& data) { increase_tree_stat(data); };
+
+  auto eval_tree_add = [&score](auto&& data) {
+    score += eval_tree_score(data);
+  };
+
+  func_apply(clear_update, std::move(model_data_tup));
+  func_apply(increase_update, std::move(model_data_tup));
+  func_apply(eval_tree_add, std::move(model_data_tup));
+  func_apply(clear_update, std::move(model_data_tup));
+
+  return score;
+}
+
 template <typename... ModelData, typename... NullData, typename Scalar>
-inline Scalar hsblock_param_inference(const options_t& opt, const Scalar rate,
+inline Scalar hsblock_param_inference(const Scalar rate,
                                       std::tuple<ModelData...>&& model_data_tup,
                                       std::tuple<NullData...>&& null_data_tup) {
   Scalar score = 0.0;
@@ -90,16 +137,16 @@ inline Scalar hsblock_param_inference(const options_t& opt, const Scalar rate,
   auto clear_increase_update = [&rate](auto&& data) {
     clear_tree_data(data);
     data.calibrate();
-    increase_tree_stat(data);    
+    increase_tree_stat(data);
     update_tree_var(data, rate);
   };
 
   auto eval_tree_add = [&score](auto&& data) {
-    score += eval_tree_stat_score(data);
+    score += eval_tree_score(data);
   };
 
   auto eval_tree_subtract = [&score](auto&& data) {
-    score -= eval_tree_stat_score(data);
+    score -= eval_tree_score(data);
   };
 
   func_apply(clear_increase_update, std::move(model_data_tup));

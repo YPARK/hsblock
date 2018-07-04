@@ -1,3 +1,5 @@
 ^README.+
 ^hsblock.+
+^temp.+
 docs
+Makefile

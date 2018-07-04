@@ -50,7 +50,8 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
   }
 
   std::mt19937 rng(opt.rseed());
-  Vec llik(opt.vbiter());
+  Vec llik_v(opt.vbiter() + 1);
+  Vec llik_e(opt.vbiter() + 1);
 
   Tree tree(depth - 1);
   if (tree.num_leaves() != Z.rows()) {
@@ -70,6 +71,11 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
   running_stat_t<SpMat> Zstat(Z.rows(), Z.cols());
 
   Progress prog(opt.vbiter(), !opt.verbose());
+  Scalar escore = hsblock_empirical_score(std::make_tuple(update_data));
+  Scalar vscore = hsblock_var_score(std::make_tuple(update_data));
+
+  llik_e(0) = escore;
+  llik_v(0) = vscore;
 
   for (Index iter = 0; iter < opt.vbiter(); ++iter) {
     Zstat.reset();
@@ -87,20 +93,26 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
 
     const Scalar rate = rate0 * std::pow(iter + delay, decay);
 
-    const Scalar score = hsblock_param_inference(
-        opt, rate, std::make_tuple(update_data), std::make_tuple(empty));
+    vscore = hsblock_param_inference(rate, std::make_tuple(update_data),
+                                     std::make_tuple(empty));
+
+    escore = hsblock_empirical_score(std::make_tuple(update_data));
 
     if (opt.verbose()) {
-      TLOG("Iter [" << iter << "] [" << rate << "] Score = " << score);
+      TLOG("Iter [" << iter << "] [" << rate << "] vScore [" << std::setw(10)
+                    << vscore << "] eScore [" << std::setw(10) << escore
+                    << "]");
     }
 
-    llik(iter) = score;
+    llik_e(iter + 1) = escore;
+    llik_v(iter + 1) = vscore;
   }
 
-  return Rcpp::List::create(Rcpp::_["Z"] = Z, Rcpp::_["llik"] = llik);
+  return Rcpp::List::create(Rcpp::_["Z"] = Z,
+                            Rcpp::_["llik.variational"] = llik_v,
+                            Rcpp::_["llik.empirical"] = llik_e);
 }
 
-// template<typename Derived>
 bool valid_bern_data(const SpMat adj) {
   calc_stat_t<Scalar> calc_stat;
   visit(adj, calc_stat);

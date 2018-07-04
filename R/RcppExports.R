@@ -33,12 +33,16 @@
 #' net.data <- pairs.to.sparse.matrix(pairs)
 #' A <- net.data$A
 #'
-#' out <- fit.hsblock(A, distrib = 'bernoulli', tree.depth = 5, vbiter = 100)
+#' out <- fit.hsblock(A, distrib = 'bernoulli', tree.depth = 5, vbiter = 1000, rate = 0.01)
 #'
 #' library(Matrix)
 #' oo <- order(apply(out$Z, 2, which.max))
 #' image(A[oo, oo])
-#'
+#' 
+#' y.lim <- range(c(out$llik.variational, out$llik.empirical))
+#' plot(out$llik.empirical, ylim = y.lim, type = 'b')
+#' points(out$llik.variational, col = 2, type = 'b', pch = 19, cex = .5)
+#' 
 #' @export
 fit.hsblock <- function(A,
                         distrib = c('bernoulli', 'poisson'),
