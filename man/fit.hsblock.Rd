@@ -6,9 +6,9 @@
 \usage{
 fit.hsblock(A, distrib = c("bernoulli", "poisson"), Opt = list(),
   Z = NULL, degree.corrected = FALSE, tree.depth = NULL, rseed = NULL,
-  vbiter = NULL, inner.iter = NULL, burnin.iter = NULL,
-  record.interval = NULL, verbose = TRUE, rate = 0.01, decay = -0.55,
-  delay = 1)
+  vbiter = NULL, inner.iter = NULL, final.inner.iter = NULL,
+  burnin.iter = NULL, record.interval = NULL, verbose = TRUE,
+  rate = 0.01, decay = -0.55, delay = 1)
 }
 \arguments{
 \item{A}{[n x n] adjacency matrix}
@@ -28,6 +28,8 @@ fit.hsblock(A, distrib = c("bernoulli", "poisson"), Opt = list(),
 \item{vbiter}{number of variational Bayes iterations (default: 1000)}
 
 \item{inner.iter}{number of Monte Carlo sampling (default: 100)}
+
+\item{final.inner.iter}{number of Monte Carlo sampling at the final step (default: 1000)}
 
 \item{burnin.iter}{number of Monte Carlo sampling to discard (default: 100)}
 

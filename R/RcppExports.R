@@ -10,6 +10,7 @@
 #' @param rseed random seed for Monte Carlo steps (default: 19937)
 #' @param vbiter number of variational Bayes iterations (default: 1000)
 #' @param inner.iter number of Monte Carlo sampling (default: 100)
+#' @param final.inner.iter number of Monte Carlo sampling at the final step (default: 1000)
 #' @param burnin.iter number of Monte Carlo sampling to discard (default: 100)
 #' @param record.interval recording interval (default: 10)
 #' @param verbose verbosity (default: TRUE)
@@ -38,11 +39,11 @@
 #' library(Matrix)
 #' oo <- order(apply(out$Z, 2, which.max))
 #' image(A[oo, oo])
-#' 
+#'
 #' y.lim <- range(c(out$llik.variational, out$llik.empirical))
 #' plot(out$llik.empirical, ylim = y.lim, type = 'b')
 #' points(out$llik.variational, col = 2, type = 'b', pch = 19, cex = .5)
-#' 
+#'
 #' @export
 fit.hsblock <- function(A,
                         distrib = c('bernoulli', 'poisson'),
@@ -53,6 +54,7 @@ fit.hsblock <- function(A,
                         rseed = NULL,
                         vbiter = NULL,
                         inner.iter = NULL,
+                        final.inner.iter = NULL,
                         burnin.iter = NULL,
                         record.interval = NULL,
                         verbose = TRUE,
@@ -69,14 +71,16 @@ fit.hsblock <- function(A,
 
     ## update Opt settings if provided
     opt.vars <- c('tree.depth', 'rseed', 'vbiter',
-                  'inner.iter', 'burnin.iter', 'record.interval', 'verbose',
-                  'rate', 'decay', 'delay')
+                  'inner.iter', 'final.inner.iter', 'burnin.iter', 'record.interval',
+                  'verbose', 'rate', 'decay', 'delay')
 
     .eval <- function(txt) eval(parse(text = txt))
 
     for(v in opt.vars) {
         val <- .eval(v)
-        if(!is.null(val)) { Opt[[v]] <- val }            
+        if(!(v %in% names(Opt)) && !is.null(val)) {
+            Opt[[v]] <- val
+        }
     }
 
     if(!('tree.depth' %in% names(Opt))) {
@@ -111,7 +115,7 @@ fit.hsblock <- function(A,
 #' Z <- build.random.sparse.Z(20, 10)
 #' library(Matrix)
 #' image(Matrix(Z))
-#' 
+#'
 #' @export
 build.random.sparse.Z <- function(K, n) {
     ret <- sparseMatrix(i = sample(K, n, replace = TRUE),
@@ -135,10 +139,10 @@ build.random.sparse.Z <- function(K, n) {
 #' pairs.file <- system.file('extdata', 'football.pairs', package = 'hsblock')
 #' pairs <- read.table(pairs.file, stringsAsFactors = FALSE)
 #' net.data <- pairs.to.sparse.matrix(pairs)
-#' 
+#'
 #' library(Matrix)
 #' image(net.data$A[1:10, 1:10])
-#' 
+#'
 #' @export
 pairs.to.sparse.matrix <- function(pairs, vertices = NULL, default.weight = 1, symmetrize = TRUE) {
 

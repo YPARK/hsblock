@@ -16,6 +16,9 @@ void set_options_from_list(Rcpp::List& _list, options_t& opt) {
   if (_list.containsElementNamed("inner.iter"))
     opt.INNER_ITER = Rcpp::as<int>(_list["inner.iter"]);
 
+  if (_list.containsElementNamed("final.inner.iter"))
+    opt.FINAL_INNER_ITER = Rcpp::as<int>(_list["final.inner.iter"]);
+
   if (_list.containsElementNamed("inner_iter"))
     opt.INNER_ITER = Rcpp::as<int>(_list["inner_iter"]);
 

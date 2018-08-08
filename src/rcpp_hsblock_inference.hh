@@ -11,7 +11,7 @@ template <typename RandDisc, typename Stat, typename RNG, typename... ModelData,
           typename... NullData>
 inline void hsblock_latent_inference(const Index numVertex, Stat& zstat,
                                      RandDisc& randK, RNG& rng,
-                                     const options_t& opt,
+                                     const options_t& opt, bool is_final,
                                      std::tuple<ModelData...>&& model_data_tup,
                                      std::tuple<NullData...>&& null_data_tup) {
   const Index K = randK.K;
@@ -53,7 +53,8 @@ inline void hsblock_latent_inference(const Index numVertex, Stat& zstat,
   func_apply(init_data, std::move(model_data_tup));
   func_apply(init_data, std::move(null_data_tup));
 
-  const Index max_iter = opt.inner_iter() + opt.burnin_iter();
+  const Index max_iter = is_final ? (opt.final_inner_iter() + opt.burnin_iter())
+                                  : (opt.inner_iter() + opt.burnin_iter());
 
   for (Index inner_iter = 0; inner_iter < max_iter; ++inner_iter) {
     for (Index ii = 0; ii < numVertex; ++ii) {

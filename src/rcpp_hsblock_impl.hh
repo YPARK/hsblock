@@ -77,10 +77,12 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
   llik_e(0) = escore;
   llik_v(0) = vscore;
 
+  // Stochastic EM steps
+
   for (Index iter = 0; iter < opt.vbiter(); ++iter) {
     Zstat.reset();
 
-    hsblock_latent_inference(n, Zstat, randK, rng, opt,
+    hsblock_latent_inference(n, Zstat, randK, rng, opt, false,
                              std::make_tuple(update_data),
                              std::make_tuple(empty));
 
@@ -99,13 +101,24 @@ Rcpp::List var_em(const SpMat adj, const SpMat latent_init,
     escore = hsblock_empirical_score(std::make_tuple(update_data));
 
     if (opt.verbose()) {
-      TLOG("Iter [" << iter << "] [" << rate << "] vScore [" << std::setw(10)
-                    << vscore << "] eScore [" << std::setw(10) << escore
-                    << "]");
+      TLOG("[Iter]" << std::setw(10) << iter << " [vScore]" << std::setw(10)
+                    << vscore << "[eScore]" << std::setw(10) << escore
+                    << "[rate]" << std::setw(10) << rate);
     }
 
     llik_e(iter + 1) = escore;
     llik_v(iter + 1) = vscore;
+  }
+
+  // Final calibration of latent variables
+  {
+    Zstat.reset();
+
+    hsblock_latent_inference(n, Zstat, randK, rng, opt, true,
+                             std::make_tuple(update_data),
+                             std::make_tuple(empty));
+
+    Z = Zstat.mean().pruned(ZERO, TOL);
   }
 
   return Rcpp::List::create(Rcpp::_["Z"] = Z,
